@@ -63,3 +63,4 @@ Data будет отвечать за сеть, локальное хранен�
 ## Figma
 
 Ссылка на фигму с компонентами - https://www.figma.com/design/bFo6cwbGgAKd07sJ9Tt2gB/SoundScape
+Ссылка на интерактивный макет - https://www.figma.com/design/bFo6cwbGgAKd07sJ9Tt2gB/SoundScape-%E2%80%94-Design-System-%C2%B7-Practice-05?node-id=359-4076
