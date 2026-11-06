@@ -1,0 +1,2526 @@
+{
+  "info": {
+    "name": "SoundScape — Production API · Практическая № 10",
+    "description": "SoundScape (Supabase production) • 17 RPC + 7 Edge Functions + Auth + 2 примера ошибок + второй тестовый PIN + отзыв share.\n\nПОРЯДОК РУЧНОЙ ПРОВЕРКИ: ① 00 / Sign in → userJwt; ② 04 / searchTracks → trackId; ③ 03 / savePlaylist (UNLISTED) → playlistId и playlistRevision; ④ 01 / getPlaylist (авторизованный); ⑤ 03 / saveMusicPin → musicPinId; ⑥ 03 / saveMusicPin — вторая точка → secondMusicPinId; ⑦ 03 / saveTravelEvent → travelEventId; ⑧ 03 / saveMusicJourney → journeyId; ⑨ 01 / get_music_pin, get_travel_event, get_music_journey; ⑩ 05 / manageShare CREATE → shareToken/shareId; ⑪ 04 / openShare; ⑫ 05 / generatePlaylist → GigaChat. При успешном входе и существующих данных эти запросы должны работать.\n\nREAD по UUID и операции DELETE больше не отправляются с пустыми идентификаторами: Pre-request script через pm.execution.skipRequest() блокирует отправку до готовности данных, показывая причину в Postman Console. DELETE требует подтверждения переменной confirmDelete=YES.\n\nВАЖНО: getMedia возвращает реальное изображение ТОЛЬКО если к объекту загружен файл в Storage, сохранена связь media/photo и указан настоящий photoId. Демонстрация медиа по умолчанию пропускается, пока mediaReady != YES. Все остальные упомянутые результаты НЕ притворяются проверенными: запросы с изменением данных выполнятся только при ручном Send.\n\nНе запускайте всю коллекцию через Runner (изменения данных, удаление, AI, квоты). Примеры 400/401 в папке 00 предназначены для демонстрации штатной обработки ошибок.\nОтдельный URL работающего API: https://spgawlqdkzoxgrncunxg.supabase.co",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "8dc4cb90-3d21-482c-ad1b-977a17be9d05"
+  },
+  "item": [
+    {
+      "name": "00 — Авторизация Supabase",
+      "description": "Заполните email и password в Variables, выполните Sign in. JWT сохранится как userJwt.",
+      "item": [
+        {
+          "name": "Sign in — получить JWT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/v1/token?grant_type=password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "v1",
+                "token"
+              ],
+              "query": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Выполните после заполнения email и password во вкладке Variables. Это пароль пользователя Supabase Authentication, НЕ базы. Успешный ответ 200 сохранит access_token в userJwt. Сам JWT не присылайте и не экспортируйте в публикуемой коллекции."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Convenience only: stores the Supabase user access JWT for later manual requests.",
+                  "if (pm.response.code === 200) {",
+                  "  try {",
+                  "    const data = pm.response.json();",
+                  "    if (typeof data.access_token === \"string\" && data.access_token) {",
+                  "      pm.collectionVariables.set(\"userJwt\", data.access_token);",
+                  "      console.log(\"SoundScape: userJwt updated. Do not export or share with live token.\");",
+                  "    }",
+                  "  } catch (e) { console.warn(\"Could not parse Auth response\"); }",
+                  "} else {",
+                  "  pm.collectionVariables.unset(\"userJwt\");",
+                  "  console.warn(\"Sign in failed: userJwt cleared\");",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"email\", \"password\", \"publishableKey\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "00 — Демонстрация ошибок (безопасно)",
+      "description": "Два негативных примера, не записывающих новые данные. Все ошибки с кодом, сообщением и requestId.",
+      "item": [
+        {
+          "name": "400 VALIDATION_ERROR — отсутствует query",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-search-tracks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-search-tracks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Безопасная проверка единого формата ошибок Edge: ожидается HTTP 400, error.code=VALIDATION_ERROR, error.message и error.requestId. Использует корректный publishableKey. Никакой импорт треков не выполняется."
+          },
+          "response": [
+            {
+              "name": "Пример из реального облака · 400 VALIDATION_ERROR",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "apikey",
+                    "value": "{{publishableKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/functions/v1/v1-search-tracks",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "functions",
+                    "v1",
+                    "v1-search-tracks"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Безопасная проверка единого формата ошибок Edge: ожидается HTTP 400, error.code=VALIDATION_ERROR, error.message и error.requestId. Использует корректный publishableKey. Никакой импорт треков не выполняется."
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"VALIDATION_ERROR\",\n    \"message\": \"Invalid query\",\n    \"requestId\": \"88a04ca0-da7a-4439-9d8e-32493389606a\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "401 INVALID_API_KEY — без apikey",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-search-tracks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-search-tracks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"lofi\",\n  \"limit\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Безопасная проверка: запрос намеренно без заголовка apikey. Ожидается HTTP 401 с error.code=INVALID_API_KEY."
+          },
+          "response": [
+            {
+              "name": "Пример из реального облака · 401 INVALID_API_KEY",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/functions/v1/v1-search-tracks",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "functions",
+                    "v1",
+                    "v1-search-tracks"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": \"lofi\",\n  \"limit\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Безопасная проверка: запрос намеренно без заголовка apikey. Ожидается HTTP 401 с error.code=INVALID_API_KEY."
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"INVALID_API_KEY\",\n    \"message\": \"Valid publishable key required\",\n    \"requestId\": \"4147e5f7-e827-49a6-b90e-1b8ff27a1efc\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — RPC · публичное чтение",
+      "description": "Ручные запросы по OpenAPI 1.2.0.",
+      "item": [
+        {
+          "name": "getVisiblePlaces — Места в видимом прямоугольнике карты",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/get_visible_places",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "get_visible_places"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minLat\": 56.2,\n  \"minLon\": 43.9,\n  \"maxLat\": 56.5,\n  \"maxLon\": 44.2,\n  \"limit\": 20,\n  \"offset\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Публичные редакционные города и опубликованные PUBLIC-отметки. Личная PRIVATE-отметка доступна только владельцу при JWT. UNLISTED исключены из обзора. При minLon > maxLon учитывается пересечение антимеридиана. При наличии Authorization: Bearer <access JWT> сервер обязан проверить JWT и применить RLS пользователя; без JWT запрос выполняется как гость.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную."
+          },
+          "response": []
+        },
+        {
+          "name": "getNearbyPlaces — Найти публичные места поблизости",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/get_nearby_places",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "get_nearby_places"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 56.3287,\n  \"longitude\": 44.002,\n  \"radiusM\": 1000,\n  \"limit\": 20,\n  \"offset\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "ST_DWithin с PostGIS geography; координаты передаются по пользовательскому действию, не записываются как история местоположения.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную."
+          },
+          "response": []
+        },
+        {
+          "name": "listPlaylists — Получить публичные или собственные плейлисты",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/list_playlists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "list_playlists"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"PUBLIC\",\n  \"limit\": 20,\n  \"offset\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Для MINE необходим JWT. PUBLIC возвращает только опубликованные публичные подборки, UNLISTED не индексируются. При наличии Authorization: Bearer <access JWT> сервер обязан проверить JWT и применить RLS пользователя; без JWT запрос выполняется как гость.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n• scope=MINE требует JWT пользователя; в шаблоне по умолчанию PUBLIC."
+          },
+          "response": []
+        },
+        {
+          "name": "getPlaylist — Получить разрешённый плейлист по ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/get_playlist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "get_playlist"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"playlistId\": \"{{playlistId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Только PUBLIC или владелец (JWT); UNLISTED открываются по отдельному токенизированному маршруту. При наличии Authorization: Bearer <access JWT> сервер обязан проверить JWT и применить RLS пользователя; без JWT запрос выполняется как гость.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n• Подставьте UUID реально доступного объекта. Для приватных объектов нужен JWT владельца.\n\nДЕМО: JWT владельца прикреплён автоматически; UUID берётся из соответствующего save-запроса. При отсутствии переменных Send будет пропущен вместо ошибочного 400."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"playlistId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "get_music_pin — Получить разрешённую музыкальную отметку",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/get_music_pin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "get_music_pin"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{musicPinId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный JSON-объект.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n• Подставьте UUID реально доступного объекта. Для приватных объектов нужен JWT владельца.\n\nДЕМО: JWT владельца прикреплён автоматически; UUID берётся из соответствующего save-запроса. При отсутствии переменных Send будет пропущен вместо ошибочного 400."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"musicPinId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "get_travel_event — Получить разрешённую запись дневника",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/get_travel_event",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "get_travel_event"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{travelEventId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный JSON-объект.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n• Подставьте UUID реально доступного объекта. Для приватных объектов нужен JWT владельца.\n\nДЕМО: JWT владельца прикреплён автоматически; UUID берётся из соответствующего save-запроса. При отсутствии переменных Send будет пропущен вместо ошибочного 400."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"travelEventId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "get_music_journey — Получить разрешённое путешествие",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/get_music_journey",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "get_music_journey"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{journeyId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный JSON-объект.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n• Подставьте UUID реально доступного объекта. Для приватных объектов нужен JWT владельца.\n\nДЕМО: JWT владельца прикреплён автоматически; UUID берётся из соответствующего save-запроса. При отсутствии переменных Send будет пропущен вместо ошибочного 400."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"journeyId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "list_music_journeys — Список публичных или собственных путешествий",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/list_music_journeys",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "list_music_journeys"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"PUBLIC\",\n  \"limit\": 20,\n  \"offset\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный JSON-объект.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n• scope=MINE требует JWT пользователя; в шаблоне по умолчанию PUBLIC."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 — RPC · чтение пользователя",
+      "description": "Ручные запросы по OpenAPI 1.2.0.",
+      "item": [
+        {
+          "name": "listTravelEvents — Получить собственные записи дневника",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/list_travel_events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "list_travel_events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 20,\n  \"offset\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Возвращает только записи владельца, включая PRIVATE. Чужие PUBLIC/UNLISTED показываются через отдельные разрешённые маршруты.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 — RPC · изменение данных (вручную)",
+      "description": "Сценарий начинается после Sign in и searchTracks. Создание выполняется вручную, ID/версии сохраняются автоматически. DELETE — только с confirmDelete=YES; запускайте в самом конце. Две PRIVATE отметки нужны для создания путешествия без PLACE в пустой БД.",
+      "item": [
+        {
+          "name": "savePlaylist — Создать или изменить собственный плейлист",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/save_playlist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "save_playlist"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"SoundScape — демонстрационный плейлист\",\n  \"description\": \"Тестовый UNLISTED плейлист для демонстрации ссылок\",\n  \"visibility\": \"UNLISTED\",\n  \"trackIds\": [\n    \"{{trackId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Атомарно сохраняет плейлист и упорядоченный состав. Редакторские опубликованные подборки не изменяются этой пользовательской RPC. Для обновления обязателен expectedRevision, несовпадение → 409.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner.\n\nДЕМО: создаёт UNLISTED плейлист из одного трека после 04/searchTracks. Автоматически сохраняет playlistId и playlistRevision. Повторное нажатие создаст ещё один плейлист (не обновление)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"trackId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save IDs/revisions from successful real responses for follow-up requests.",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  try {",
+                  "    const data=pm.response.json();",
+                  "    if (data && /^[0-9a-f-]{36}$/i.test(String(data.id || \"\"))) {",
+                  "      pm.collectionVariables.set(\"playlistId\",data.id);",
+                  "      if (Number.isInteger(data.revision)) pm.collectionVariables.set(\"playlistRevision\",String(data.revision));",
+                  "      console.log(\"SoundScape: playlistId и версия сохранены после успешного ответа\");",
+                  "    }",
+                  "  } catch (e) {console.warn(\"Ответ сервера нельзя прочитать как JSON\");}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "deletePlaylist — Удалить собственный плейлист",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/delete_playlist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "delete_playlist"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{playlistId}}\",\n  \"expectedRevision\": {{playlistRevision}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Только владелец, проверка версии; редакционные плейлисты защищены от удаления обычным пользователем.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner.\n\nDEMO DELETE: запрос не отправится без confirmDelete=YES. После успешного удаления очищает ID и версию. Запускайте последним!"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"playlistId\", \"playlistRevision\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "if (pm.variables.get(\"confirmDelete\") !== \"YES\") {",
+                  "  console.warn(\"SoundScape: DELETE пропущен. Для удаления задайте confirmDelete=YES в Variables.\");",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code>=200&&pm.response.code<300){",
+                  "  try {const out=pm.response.json(); if (out && out.success===true){",
+                  "    pm.collectionVariables.unset(\"playlistId\");",
+                  "    pm.collectionVariables.unset(\"playlistRevision\");",
+                  "    pm.collectionVariables.unset(\"confirmDelete\");",
+                  "  }} catch(e){}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "saveMusicPin — точка №1 (сохраняет musicPinId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/save_music_pin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "save_music_pin"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Тестовая музыкальная точка 1\",\n  \"latitude\": 56.3287,\n  \"longitude\": 44.002,\n  \"visibility\": \"PRIVATE\",\n  \"trackIds\": [\n    \"{{trackId}}\"\n  ],\n  \"photoPaths\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "1+ существующих треков, до 5 фотографий; пути фото проверяются по Storage ownership и принадлежности к записи. Для обновления expectedRevision обязателен.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"trackId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save IDs/revisions from successful real responses for follow-up requests.",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  try {",
+                  "    const data=pm.response.json();",
+                  "    if (data && /^[0-9a-f-]{36}$/i.test(String(data.id || \"\"))) {",
+                  "      pm.collectionVariables.set(\"musicPinId\",data.id);",
+                  "      if (Number.isInteger(data.revision)) pm.collectionVariables.set(\"musicPinRevision\",String(data.revision));",
+                  "      console.log(\"SoundScape: musicPinId и версия сохранены после успешного ответа\");",
+                  "    }",
+                  "  } catch (e) {console.warn(\"Ответ сервера нельзя прочитать как JSON\");}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "saveMusicPin — точка №2 (сохраняет secondMusicPinId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/save_music_pin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "save_music_pin"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Тестовая музыкальная точка 2\",\n  \"latitude\": 56.337,\n  \"longitude\": 44.02,\n  \"visibility\": \"PRIVATE\",\n  \"trackIds\": [\n    \"{{trackId}}\"\n  ],\n  \"photoPaths\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Создаёт вторую PRIVATE отметку для маршрута из двух точек; требует 04/searchTracks. Сохраняет отдельную переменную secondMusicPinId. Изменяет БД; выполнить вручную."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"trackId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save IDs/revisions from successful real responses for follow-up requests.",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  try {",
+                  "    const data=pm.response.json();",
+                  "    if (data && /^[0-9a-f-]{36}$/i.test(String(data.id || \"\"))) {",
+                  "      pm.collectionVariables.set(\"secondMusicPinId\",data.id);",
+                  "      if (Number.isInteger(data.revision)) pm.collectionVariables.set(\"secondMusicPinRevision\",String(data.revision));",
+                  "      console.log(\"SoundScape: secondMusicPinId и версия сохранены после успешного ответа\");",
+                  "    }",
+                  "  } catch (e) {console.warn(\"Ответ сервера нельзя прочитать как JSON\");}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "saveTravelEvent — Создать или изменить запись музыкального дневника",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/save_travel_event",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "save_travel_event"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Демо: запись музыкального дневника\",\n  \"eventDate\": \"2026-11-06\",\n  \"locationName\": \"Нижний Новгород\",\n  \"visibility\": \"PRIVATE\",\n  \"trackIds\": [\n    \"{{trackId}}\"\n  ],\n  \"photoPaths\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "По умолчанию PRIVATE; 1+ треков, до 10 фото, музыкальная отметка опциональна. expectedRevision обязателен при обновлении.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"trackId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save IDs/revisions from successful real responses for follow-up requests.",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  try {",
+                  "    const data=pm.response.json();",
+                  "    if (data && /^[0-9a-f-]{36}$/i.test(String(data.id || \"\"))) {",
+                  "      pm.collectionVariables.set(\"travelEventId\",data.id);",
+                  "      if (Number.isInteger(data.revision)) pm.collectionVariables.set(\"travelEventRevision\",String(data.revision));",
+                  "      console.log(\"SoundScape: travelEventId и версия сохранены после успешного ответа\");",
+                  "    }",
+                  "  } catch (e) {console.warn(\"Ответ сервера нельзя прочитать как JSON\");}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "saveMusicJourney — Создать или изменить музыкальное путешествие",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/save_music_journey",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "save_music_journey"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Тестовое музыкальное путешествие\",\n  \"visibility\": \"PRIVATE\",\n  \"stops\": [\n    {\n      \"kind\": \"PIN\",\n      \"id\": \"{{musicPinId}}\",\n      \"position\": 1\n    },\n    {\n      \"kind\": \"PIN\",\n      \"id\": \"{{secondMusicPinId}}\",\n      \"position\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Минимум две разрешённые точки и явный порядок. Сервер проверяет доступность каждого PIN; длительность выводится из треков связанного плейлиста.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner.\n• Нужны два реально существующих и доступных placeId: {{placeId}} и {{secondPlaceId}}.\n\nДЕМО: использует ДВЕ созданные выше PRIVATE-отметки, а не несуществующие редакционные PLACE. Сохраняет journeyId и journeyRevision."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"musicPinId\", \"secondMusicPinId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save IDs/revisions from successful real responses for follow-up requests.",
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  try {",
+                  "    const data=pm.response.json();",
+                  "    if (data && /^[0-9a-f-]{36}$/i.test(String(data.id || \"\"))) {",
+                  "      pm.collectionVariables.set(\"journeyId\",data.id);",
+                  "      if (Number.isInteger(data.revision)) pm.collectionVariables.set(\"journeyRevision\",String(data.revision));",
+                  "      console.log(\"SoundScape: journeyId и версия сохранены после успешного ответа\");",
+                  "    }",
+                  "  } catch (e) {console.warn(\"Ответ сервера нельзя прочитать как JSON\");}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "delete_music_pin — Удалить собственную отметку",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/delete_music_pin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "delete_music_pin"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{musicPinId}}\",\n  \"expectedRevision\": {{musicPinRevision}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный JSON-объект.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner.\n\nDEMO DELETE: запрос не отправится без confirmDelete=YES. После успешного удаления очищает ID и версию. Запускайте последним!"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"musicPinId\", \"musicPinRevision\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "if (pm.variables.get(\"confirmDelete\") !== \"YES\") {",
+                  "  console.warn(\"SoundScape: DELETE пропущен. Для удаления задайте confirmDelete=YES в Variables.\");",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code>=200&&pm.response.code<300){",
+                  "  try {const out=pm.response.json(); if (out && out.success===true){",
+                  "    pm.collectionVariables.unset(\"musicPinId\");",
+                  "    pm.collectionVariables.unset(\"musicPinRevision\");",
+                  "    pm.collectionVariables.unset(\"confirmDelete\");",
+                  "  }} catch(e){}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "delete_travel_event — Удалить собственную запись дневника",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/delete_travel_event",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "delete_travel_event"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{travelEventId}}\",\n  \"expectedRevision\": {{travelEventRevision}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный JSON-объект.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner.\n\nDEMO DELETE: запрос не отправится без confirmDelete=YES. После успешного удаления очищает ID и версию. Запускайте последним!"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"travelEventId\", \"travelEventRevision\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "if (pm.variables.get(\"confirmDelete\") !== \"YES\") {",
+                  "  console.warn(\"SoundScape: DELETE пропущен. Для удаления задайте confirmDelete=YES в Variables.\");",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code>=200&&pm.response.code<300){",
+                  "  try {const out=pm.response.json(); if (out && out.success===true){",
+                  "    pm.collectionVariables.unset(\"travelEventId\");",
+                  "    pm.collectionVariables.unset(\"travelEventRevision\");",
+                  "    pm.collectionVariables.unset(\"confirmDelete\");",
+                  "  }} catch(e){}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "delete_music_journey — Удалить собственное путешествие",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/delete_music_journey",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rest",
+                "v1",
+                "rpc",
+                "delete_music_journey"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{journeyId}}\",\n  \"expectedRevision\": {{journeyRevision}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный JSON-объект.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner.\n\nDEMO DELETE: запрос не отправится без confirmDelete=YES. После успешного удаления очищает ID и версию. Запускайте последним!"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"journeyId\", \"journeyRevision\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "if (pm.variables.get(\"confirmDelete\") !== \"YES\") {",
+                  "  console.warn(\"SoundScape: DELETE пропущен. Для удаления задайте confirmDelete=YES в Variables.\");",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code>=200&&pm.response.code<300){",
+                  "  try {const out=pm.response.json(); if (out && out.success===true){",
+                  "    pm.collectionVariables.unset(\"journeyId\");",
+                  "    pm.collectionVariables.unset(\"journeyRevision\");",
+                  "    pm.collectionVariables.unset(\"confirmDelete\");",
+                  "  }} catch(e){}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Edge · поиск, источники и ссылки",
+      "description": "Поиск lofi сохраняет trackId для CREATE; openShare требует созданного manageShare токена. getMedia без реального фото пропускается (не подставляйте фальшивый photoId).",
+      "item": [
+        {
+          "name": "searchAll — Единый поиск по пяти категориям",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-search"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"ambient\",\n  \"categories\": [\n    \"TRACK\",\n    \"ARTIST\",\n    \"PLAYLIST\",\n    \"PLACE\",\n    \"USER\"\n  ],\n  \"limit\": 10,\n  \"offset\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Поиск по композициям, исполнителям, плейлистам, городам/местам и пользователям. Не раскрывает чужой PRIVATE/UNLISTED-контент. Жанр, настроение и только IN_APP влияют на релевантные музыкальные результаты. Гость использует publishable key; необязательный JWT позволяет видеть собственные разрешённые объекты после проверки на сервере. Публичная Edge Function проверяет apikey на сервере (verify_jwt=false для ключевого режима).\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную."
+          },
+          "response": []
+        },
+        {
+          "name": "searchTracks — Найти существующие проверенные композиции",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-search-tracks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-search-tracks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"lofi\",\n  \"limit\": 5,\n  \"offset\": 0,\n  \"onlyInApp\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Отдельная Edge Function: поиск через Audius с дедупликацией, только реальные provider IDs; не возвращать фиктивные внешние ссылки. Настройка JWT/publishable проверки Edge Function согласуется при деплое. Публичный вызов по apikey: проверка ключа в обработчике (verify_jwt=false для режима publishable); JWT пользователя необязателен, но при его наличии должен быть валидирован. Фильтры genreIds/moodIds опираются на нормализованные связи track_genres/track_moods.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n\nПроверено в облаке: HTTP 200, 5 треков по запросу lofi. После успеха Postman сохраняет первый ID в {{trackId}}. Поиск может импортировать треки в каталог."
+          },
+          "response": [
+            {
+              "name": "Пример из реального облака · 200 Audius",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "apikey",
+                    "value": "{{publishableKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/functions/v1/v1-search-tracks",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "functions",
+                    "v1",
+                    "v1-search-tracks"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": \"lofi\",\n  \"limit\": 5,\n  \"offset\": 0,\n  \"onlyInApp\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Отдельная Edge Function: поиск через Audius с дедупликацией, только реальные provider IDs; не возвращать фиктивные внешние ссылки. Настройка JWT/publishable проверки Edge Function согласуется при деплое. Публичный вызов по apikey: проверка ключа в обработчике (verify_jwt=false для режима publishable); JWT пользователя необязателен, но при его наличии должен быть валидирован. Фильтры genreIds/moodIds опираются на нормализованные связи track_genres/track_moods.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n\nПроверено в облаке: HTTP 200, 5 треков по запросу lofi. После успеха Postman сохраняет первый ID в {{trackId}}. Поиск может импортировать треки в каталог."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"items\": [\n    {\n      \"id\": \"18889ac0-5fec-4602-835b-9cc398faee25\",\n      \"title\": \"kirbytape mix vol. 13 - lofi house edition\",\n      \"artist\": \"omgkirby\",\n      \"durationMs\": 1690000,\n      \"availability\": \"EXTERNAL_ONLY\",\n      \"provider\": \"AUDIUS\"\n    },\n    {\n      \"id\": \"c34008ef-f3de-466f-ba64-333011dd15fe\",\n      \"title\": \"lofi type beat\",\n      \"artist\": \"[bsdu]\",\n      \"durationMs\": 334000,\n      \"availability\": \"EXTERNAL_ONLY\",\n      \"provider\": \"AUDIUS\"\n    },\n    {\n      \"id\": \"69fc9ed9-3b57-490a-8003-643b02c705a1\",\n      \"title\": \"Lofi Type Beat  Love me\",\n      \"artist\": \"Beats Love\",\n      \"durationMs\": 191000,\n      \"availability\": \"EXTERNAL_ONLY\",\n      \"provider\": \"AUDIUS\"\n    },\n    {\n      \"id\": \"c78c9315-254b-4f3b-b54b-35e33089cabf\",\n      \"title\": \"chilling breakfast  lofi\",\n      \"artist\": \"Chilling\",\n      \"durationMs\": 1872000,\n      \"availability\": \"EXTERNAL_ONLY\",\n      \"provider\": \"AUDIUS\"\n    },\n    {\n      \"id\": \"89818a23-d73a-4c70-ae00-f2f68cc6474b\",\n      \"title\": \"Music Lofi Beats -free download-\",\n      \"artist\": \"Beats Love\",\n      \"durationMs\": 3620000,\n      \"availability\": \"EXTERNAL_ONLY\",\n      \"provider\": \"AUDIUS\"\n    }\n  ],\n  \"limit\": 5,\n  \"offset\": 0,\n  \"hasMore\": true\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Convenience only: remember one real catalog track ID for the other example requests.",
+                  "if (pm.response.code === 200) {",
+                  "  try {",
+                  "    const data = pm.response.json();",
+                  "    if (Array.isArray(data.items) && data.items.length > 0 && data.items[0].id) {",
+                  "      pm.collectionVariables.set(\"trackId\", data.items[0].id);",
+                  "    }",
+                  "  } catch (e) { /* Ignore non-JSON response */ }",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"publishableKey\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "resolveTrack — Получить актуальный допустимый аудиоисточник",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-resolve-track",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-resolve-track"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trackId\": \"{{trackId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Возвращает временный URL для Media3 либо точную внешнюю ссылку; не проксирует аудиобайты. URL в примере явно фиктивный, не действующий аудиопоток. Права cache/download по умолчанию false до проверки. Настройка JWT/publishable проверки Edge Function согласуется при деплое. Публичный вызов по apikey: проверка ключа в обработчике (verify_jwt=false для режима publishable); JWT пользователя необязателен, но при его наличии должен быть валидирован.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"trackId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "openShare — Открыть UNLISTED-материал по секретному токену",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-open-share",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-open-share"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{shareToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Только действующий токен; хранить в БД исключительно хеш токена. Выдавать ограниченное представление объекта с соблюдением правил доступа к медиа. Отзыв немедленно блокирует последующие запросы. Настройка JWT/publishable проверки Edge Function согласуется при деплое. Публичный вызов по apikey: проверка ключа в обработчике (verify_jwt=false для режима publishable); JWT пользователя необязателен, но при его наличии должен быть валидирован. Дополнительно проверяются expires_at и revoked_at токена.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n• Share token — чувствительные данные; не помещайте его в репозиторий и не пересылайте публично.\n\nСначала создайте ссылку через 05/manageShare CREATE; токен будет сохранён автоматически."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"shareToken\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "getMedia — Защищённая выдача изображений",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "*/*",
+                "type": "text"
+              },
+              {
+                "key": "X-SoundScape-Share-Token",
+                "value": "{{shareToken}}",
+                "type": "text",
+                "disabled": true,
+                "description": "Только для UNLISTED и только при наличии действующего share token. Включить вручную."
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-media"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"objectType\": \"PIN\",\n  \"objectId\": \"{{musicPinId}}\",\n  \"photoId\": \"{{photoId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "При успешном запросе возвращает бинарное изображение, Cache-Control: no-store. Не выдаёт прямой URL к Storage.\n\n• По умолчанию гостевой запрос: только apikey; для приватного объекта добавьте действительный JWT пользователя вручную.\n• Успех возвращает бинарное изображение, а ошибка — JSON. Для PIN/EVENT также нужен photoId; для PLAYLIST/PLACE он запрещён.\n\nДля PIN/EVENT в JSON также обязателен photoId. Успешный ответ может быть бинарным изображением.\n\nДЕМО НЕ ВКЛЮЧЕНО автоматически: фотофайлов в облаке пока нет. Чтобы получить HTTP 200, сначала загрузить фото в бакет soundscape-media и прикрепить через saveMusicPin; затем взять UUID строки pin_photos (НЕ storage_path), задать photoId и mediaReady=YES. При отсутствии реального фото функция корректно возвращает 404/VALIDATION_ERROR, это не баг сервера."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"musicPinId\", \"photoId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "if (pm.variables.get(\"mediaReady\") !== \"YES\") {",
+                  "  console.warn(\"SoundScape: getMedia пропущен — нет загруженного изображения. Задайте mediaReady=YES после загрузки и привязки файла к PIN в Storage.\");",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Edge · авторизованные операции",
+      "description": "Сначала 03/savePlaylist (UNLISTED). Затем CREATE share -> 04/openShare -> опциональный REVOKE. GigaChat требует JWT; модель GigaChat-2 и TLS CA уже настроены на сервере.",
+      "item": [
+        {
+          "name": "generatePlaylist — Сформировать ИИ-подборку из реальных кандидатов",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-generate-playlist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-generate-playlist"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"QUICK\",\n  \"prompt\": \"lofi\",\n  \"count\": 3,\n  \"onlyInApp\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Сервер получает реальные кандидаты, передаёт только разрешённые ID в GigaChat, валидирует JSON и IDs. Это предпросмотр, не сохраняет плейлист. Не передаёт личную историю и приватный дневник. Настройка JWT/publishable проверки Edge Function согласуется при деплое. Для этой операции обязателен JWT вошедшего пользователя, только apikey недостаточно.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• Расходует суточную квоту AI и обращается к внешнему провайдеру. Без GIGACHAT_AUTH_KEY генерация недоступна.\n\nПроверено в облаке: HTTP 200 с 3 треками после настройки GIGACHAT_MODEL=GigaChat-2 и TLS CA. Требует успешного запроса Sign in в той же коллекции."
+          },
+          "response": [
+            {
+              "name": "Пример из реального облака · 200 GigaChat",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "apikey",
+                    "value": "{{publishableKey}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userJwt}}",
+                    "type": "text",
+                    "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/functions/v1/v1-generate-playlist",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "functions",
+                    "v1",
+                    "v1-generate-playlist"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mode\": \"QUICK\",\n  \"prompt\": \"lofi\",\n  \"count\": 3,\n  \"onlyInApp\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Сервер получает реальные кандидаты, передаёт только разрешённые ID в GigaChat, валидирует JSON и IDs. Это предпросмотр, не сохраняет плейлист. Не передаёт личную историю и приватный дневник. Настройка JWT/publishable проверки Edge Function согласуется при деплое. Для этой операции обязателен JWT вошедшего пользователя, только apikey недостаточно.\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• Расходует суточную квоту AI и обращается к внешнему провайдеру. Без GIGACHAT_AUTH_KEY генерация недоступна.\n\nПроверено в облаке: HTTP 200 с 3 треками после настройки GIGACHAT_MODEL=GigaChat-2 и TLS CA. Требует успешного запроса Sign in в той же коллекции."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"title\": \"QUICK Lofi\",\n  \"description\": \"Quickly created lofi playlist for relaxation and focus.\",\n  \"items\": [\n    {\n      \"trackId\": \"c34008ef-f3de-466f-ba64-333011dd15fe\",\n      \"position\": 1,\n      \"reason\": \"lofi type beat\"\n    },\n    {\n      \"trackId\": \"69fc9ed9-3b57-490a-8003-643b02c705a1\",\n      \"position\": 2,\n      \"reason\": \"Lofi Type Beat Love me\"\n    },\n    {\n      \"trackId\": \"17779c8b-feed-49ed-bf5f-2969728807d7\",\n      \"position\": 3,\n      \"reason\": \"chill lofi set\"\n    }\n  ],\n  \"warnings\": []\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "manageShare — Создание и отзыв UNLISTED-ссылок",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-manage-share",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-manage-share"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"CREATE\",\n  \"objectType\": \"PLAYLIST\",\n  \"objectId\": \"{{playlistId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "\n\n• Требуются оба заголовка: apikey и Authorization: Bearer <JWT пользователя>.\n• ИЗМЕНЯЕТ ДАННЫЕ: отправляйте только осознанно и только на своём тестовом объекте. Не запускайте всю коллекцию через Runner.\n• Шаблон CREATE. Для REVOKE замените тело на {\"action\":\"REVOKE\",\"shareId\":\"{{shareId}}\"}. Токен CREATE показывается только один раз: сохраните безопасно.\n\nПроверка: плейлист ДОЛЖЕН быть UNLISTED; 03/savePlaylist уже создаёт его таким. Возвращённый токен будет сохранён как shareToken, ID ссылки — shareId."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"playlistId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  try {const data=pm.response.json();",
+                  "    if(data.shareId && data.token){",
+                  "      pm.collectionVariables.set(\"shareId\",data.shareId);",
+                  "      pm.collectionVariables.set(\"shareToken\",data.token);",
+                  "      console.log(\"SoundScape: UNLISTED share token сохранён локально. Не показывайте токен третьим лицам.\");",
+                  "    }",
+                  "  } catch(e){}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "manageShare REVOKE — отозвать созданную UNLISTED-ссылку (вручную)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{publishableKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userJwt}}",
+                "type": "text",
+                "description": "Только JWT пользователя из Supabase Auth; не publishable key и не service_role."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/v1-manage-share",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "functions",
+                "v1",
+                "v1-manage-share"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"REVOKE\",\n  \"shareId\": \"{{shareId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "ОТЗЫВ! Отправлять только после 04/openShare. Действие необратимо: токен сразу перестанет работать. Требует confirmDelete=YES."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Do not send invalid requests with empty UUIDs or missing credentials.",
+                  "const missing = [\"userJwt\", \"shareId\"] .filter(k => {",
+                  "  const v = pm.variables.get(k);",
+                  "  return typeof v !== \"string\" || !v.trim() || v.includes(\"{{\");",
+                  "});",
+                  "if (missing.length) {",
+                  "  console.warn(\"SoundScape: запрос пропущен; сначала заполните:\", missing.join(\", \"));",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "if (pm.variables.get(\"confirmDelete\") !== \"YES\") {",
+                  "  console.warn(\"SoundScape: REVOKE пропущен; требуется confirmDelete=YES\");",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ],
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  try {const out=pm.response.json(); if(out.revoked === true){",
+                  "    pm.collectionVariables.unset(\"shareToken\");",
+                  "    pm.collectionVariables.unset(\"shareId\");",
+                  "    pm.collectionVariables.unset(\"confirmDelete\");",
+                  "  }} catch(e){}",
+                  "}"
+                ],
+                "packages": {}
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://spgawlqdkzoxgrncunxg.supabase.co",
+      "type": "string",
+      "description": "Cloud API URL"
+    },
+    {
+      "key": "publishableKey",
+      "value": "sb_publishable_kd7NVBWuQaKOhJUIU_aL5A_0YcrD8b5",
+      "type": "string",
+      "description": "Public project key, not service role"
+    },
+    {
+      "key": "email",
+      "value": "mishatop173@gmail.com",
+      "type": "string",
+      "description": "Supabase Auth login email"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "secret",
+      "description": "Пароль отдельного тестового Supabase Auth пользователя. НАХОДИТСЯ В JSON В ОТКРЫТОМ ВИДЕ; обязательно изменить после проверки."
+    },
+    {
+      "key": "userJwt",
+      "value": "",
+      "type": "secret",
+      "description": "Supabase access token, auto-saved by sign in request"
+    },
+    {
+      "key": "trackId",
+      "value": "",
+      "type": "string",
+      "description": "Set by successful searchTracks request"
+    },
+    {
+      "key": "playlistId",
+      "value": "",
+      "type": "string",
+      "description": "Own playlist UUID"
+    },
+    {
+      "key": "placeId",
+      "value": "",
+      "type": "string",
+      "description": "Accessible place UUID"
+    },
+    {
+      "key": "musicPinId",
+      "value": "",
+      "type": "string",
+      "description": "Own music pin UUID"
+    },
+    {
+      "key": "travelEventId",
+      "value": "",
+      "type": "string",
+      "description": "Own travel event UUID"
+    },
+    {
+      "key": "journeyId",
+      "value": "",
+      "type": "string",
+      "description": "Own journey UUID"
+    },
+    {
+      "key": "shareToken",
+      "value": "",
+      "type": "secret",
+      "description": "One-time unlisted share token"
+    },
+    {
+      "key": "shareId",
+      "value": "",
+      "type": "string",
+      "description": "Existing share UUID for REVOKE"
+    },
+    {
+      "key": "secondMusicPinId",
+      "value": "",
+      "type": "string",
+      "description": "UUID второй тестовой музыкальной отметки — записывается вторым запросом saveMusicPin"
+    },
+    {
+      "key": "playlistRevision",
+      "value": "",
+      "type": "string",
+      "description": "Актуальная версия тестового плейлиста для DELETE"
+    },
+    {
+      "key": "musicPinRevision",
+      "value": "",
+      "type": "string",
+      "description": "Актуальная версия первой тестовой отметки для DELETE"
+    },
+    {
+      "key": "secondMusicPinRevision",
+      "value": "",
+      "type": "string",
+      "description": "Актуальная версия второй тестовой отметки"
+    },
+    {
+      "key": "travelEventRevision",
+      "value": "",
+      "type": "string",
+      "description": "Актуальная версия тестового события для DELETE"
+    },
+    {
+      "key": "journeyRevision",
+      "value": "",
+      "type": "string",
+      "description": "Актуальная версия тестового путешествия для DELETE"
+    },
+    {
+      "key": "confirmDelete",
+      "value": "",
+      "type": "string",
+      "description": "Установите YES только перед осознанным DELETE, затем очистите"
+    },
+    {
+      "key": "mediaReady",
+      "value": "",
+      "type": "string",
+      "description": "Установите YES только когда в Storage существует прикреплённое к объекту фото"
+    },
+    {
+      "key": "photoId",
+      "value": "",
+      "type": "string",
+      "description": "Реальный UUID строки pin_photos/event_photos, не путь Storage"
+    }
+  ]
+}

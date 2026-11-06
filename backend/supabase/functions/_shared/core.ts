@@ -1,4 +1,7 @@
 // SoundScape Edge: common validation, explicit authentication, safe errors.
+import { newRequestContext, logRequest, logInternalFailure, logQuotaLimited } from './observability.ts';
+import type { RequestContext } from './observability.ts';
+export type { RequestContext } from './observability.ts';
 export type Json = Record<string, unknown>;
 export type Session = { userId: string | null; jwt: string | null };
 export class HttpError extends Error {
@@ -48,16 +51,36 @@ export async function body(req: Request): Promise<Json> {
 export function response(data: unknown, status = 200, extra?: Record<string,string>): Response {
   return new Response(JSON.stringify(data), {status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff',...extra}});
 }
-export function errorResponse(err: unknown): Response {
+/** Keep the OpenAPI 1.2.0 EdgeError envelope; direct PostgREST RPC is separate. */
+export function errorResponse(err: unknown, context?: RequestContext): Response {
   const e = err instanceof HttpError ? err : new HttpError(500,'INTERNAL_ERROR','Internal server error');
-  return response({error:{code:e.code,message:e.message,requestId:crypto.randomUUID()}},e.status,
-      e.retryAfter ? {'retry-after':String(e.retryAfter)} : undefined);
+  const requestId = context?.requestId ?? crypto.randomUUID();
+  const headers: Record<string,string> = {'x-request-id':requestId};
+  if (Number.isInteger(e.retryAfter) && (e.retryAfter as number) > 0 && (e.retryAfter as number) <= 86400)
+    headers['retry-after'] = String(e.retryAfter);
+  return response({error:{code:e.code,message:e.message,requestId}},e.status,headers);
 }
-export function run(fn:(req:Request)=>Promise<Response>): (req:Request)=>Promise<Response> {
+/** One independent context per invocation: no mutable global current request state. */
+export function run(fn:(req:Request,context:RequestContext)=>Promise<Response>, operation='edge'):
+  (req:Request)=>Promise<Response> {
   return async (req:Request)=>{
-    try { if(req.method==='OPTIONS') return new Response(null,{status:204,headers:{allow:'POST, OPTIONS'}});
-          return await fn(req); }
-    catch(e){if(!(e instanceof HttpError)) console.error('soundscape edge unexpected failure',e instanceof Error?e.name:'error'); return errorResponse(e);}
+    const ctx = newRequestContext(operation);
+    let result: Response;
+    let errorCode: string | undefined;
+    try {
+      if (req.method === 'OPTIONS') result = new Response(null,{status:204,headers:{allow:'POST, OPTIONS'}});
+      else result = await fn(req,ctx);
+    } catch(e) {
+      errorCode = e instanceof HttpError ? e.code : 'INTERNAL_ERROR';
+      result = errorResponse(e,ctx);
+    }
+    // Copy metadata without consuming the response body. This also handles immutable
+    // header guards (e.g. Response.redirect) and preserves binary media streams.
+    const headers = new Headers(result.headers);
+    headers.set('x-request-id',ctx.requestId);
+    const output = new Response(result.body,{status:result.status,statusText:result.statusText,headers});
+    logRequest(ctx,output.status,errorCode);
+    return output;
   };
 }
 function keyFromEnv(plural:string,singular:string):string {
@@ -124,7 +147,7 @@ export async function parseRpcSuccess(res: Response): Promise<unknown> {
   }
 }
 
-export async function rpc(name:string,payload:Record<string,unknown>):Promise<any> {
+export async function rpc(name:string,payload:Record<string,unknown>,ctx?:RequestContext):Promise<any> {
   if(!/^edge_[a-z_]+$/.test(name)) throw new HttpError(500,'INTERNAL_ERROR','Invalid RPC');
   const res=await adminRest('rpc/'+name,{method:'POST',body:JSON.stringify(payload)});
   if(!res.ok){
@@ -132,30 +155,63 @@ export async function rpc(name:string,payload:Record<string,unknown>):Promise<an
     // Do not leak DB internals. Map expected PostgreSQL status to public API.
     if(problem?.code==='42501'||res.status===403)throw new HttpError(403,'FORBIDDEN','Operation forbidden');
     if(problem?.code==='22023')throw new HttpError(422,'VALIDATION_ERROR','Operation validation failed');
-    console.error('internal rpc status',name,res.status);
+    logInternalFailure(ctx,'RPC_ERROR',name,res.status);
     throw new HttpError(503,'DATABASE_UNAVAILABLE','Internal database operation failed');
   }
   try {
     return await parseRpcSuccess(res);
   } catch (e) {
     if (e instanceof HttpError && e.code === 'DATABASE_RESPONSE_INVALID') {
-      console.error('internal rpc unexpected response', name, res.status);
+      logInternalFailure(ctx,'RPC_INVALID_RESPONSE',name,res.status);
     }
     throw e;
   }
 }
-export async function reserve(operation:string,userId:string|null):Promise<string|null> {
-  const result=await rpc('edge_reserve_quota',{p_operation:operation,p_user:userId});
-  if(result?.allowed!==true) throw new HttpError(429,'RATE_LIMITED','Request limit exceeded',Number(result?.retryAfter)||60);
-  return typeof result.leaseId==='string'?result.leaseId:null;
+/** Validate trusted PostgREST quota RPC result; missing or malformed results must fail closed.
+ * The SQL quota function owns counters and concurrency. Edge never duplicates them.
+ */
+export function parseQuotaResult(result: unknown, operation: string):
+  { allowed: true; leaseId: string | null } | { allowed: false; retryAfter: number; reason: string } {
+  if (!result || typeof result !== 'object' || Array.isArray(result))
+    throw new HttpError(503,'DATABASE_UNAVAILABLE','Quota check unavailable');
+  const data = result as Record<string,unknown>;
+  if (data.allowed === true) {
+    if (operation === 'GENERATE') {
+      if (typeof data.leaseId !== 'string' || !uuidRe.test(data.leaseId))
+        throw new HttpError(503,'DATABASE_UNAVAILABLE','Quota lease unavailable');
+      return {allowed:true,leaseId:data.leaseId};
+    }
+    if (data.leaseId !== null && data.leaseId !== undefined)
+      throw new HttpError(503,'DATABASE_UNAVAILABLE','Invalid quota response');
+    return {allowed:true,leaseId:null};
+  }
+  if (data.allowed === false) {
+    if (!['GLOBAL_LIMIT','USER_LIMIT','CONCURRENT_LIMIT'].includes(data.reason as string) ||
+        typeof data.retryAfter !== 'number' || !Number.isInteger(data.retryAfter) ||
+        data.retryAfter < 1 || data.retryAfter > 86400)
+      throw new HttpError(503,'DATABASE_UNAVAILABLE','Invalid quota response');
+    return {allowed:false,retryAfter:data.retryAfter,reason:data.reason as string};
+  }
+  throw new HttpError(503,'DATABASE_UNAVAILABLE','Invalid quota response');
 }
-export async function release(lease:string|null){if(lease){try {await rpc('edge_release_generation',{p_lease:lease});}catch{console.error('Failed to release generation lease');}}}
-export async function select(table:string,query:string,jwt:string|null,privileged=false):Promise<any[]> {
+export async function reserve(operation:string,userId:string|null,ctx?:RequestContext):Promise<string|null> {
+  const raw=await rpc('edge_reserve_quota',{p_operation:operation,p_user:userId},ctx);
+  let decision:ReturnType<typeof parseQuotaResult>;
+  try { decision=parseQuotaResult(raw,operation); }
+  catch(e) { logInternalFailure(ctx,'QUOTA_INVALID_RESPONSE','edge_reserve_quota'); throw e; }
+  if (!decision.allowed) {
+    logQuotaLimited(ctx,decision.reason,decision.retryAfter);
+    throw new HttpError(429,'RATE_LIMITED','Request limit exceeded',decision.retryAfter);
+  }
+  return decision.leaseId;
+}
+export async function release(lease:string|null,ctx?:RequestContext){if(lease){try {await rpc('edge_release_generation',{p_lease:lease},ctx);}catch{logInternalFailure(ctx,'LEASE_RELEASE_ERROR','edge_release_generation');}}}
+export async function select(table:string,query:string,jwt:string|null,privileged=false,ctx?:RequestContext):Promise<any[]> {
   if(!/^[a-z_]+$/.test(table)) throw new HttpError(500,'INTERNAL_ERROR','Invalid table');
   const url=supabaseUrl()+'/rest/v1/'+table+'?'+query;
   const res=await fetch(url,{headers:privileged?{'apikey':secretKey()}:publicHeaders(jwt),signal:AbortSignal.timeout(9000)})
-    .catch(()=>{throw new HttpError(503,'DATABASE_UNAVAILABLE','Database unavailable');});
-  if(!res.ok) throw new HttpError(503,'DATABASE_UNAVAILABLE','Database query failed');
+    .catch(()=>{logInternalFailure(ctx,'DATABASE_QUERY_ERROR',table);throw new HttpError(503,'DATABASE_UNAVAILABLE','Database unavailable');});
+  if(!res.ok) {logInternalFailure(ctx,'DATABASE_QUERY_ERROR',table,res.status);throw new HttpError(503,'DATABASE_UNAVAILABLE','Database query failed');}
   const data=await res.json();return Array.isArray(data)?data:[];
 }
 export async function sha256(s:string):Promise<string> {
