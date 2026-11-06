@@ -1,0 +1,2401 @@
+openapi: 3.0.3
+info:
+  title: SoundScape — серверные HTTP-контракты
+  version: 1.2.0
+  description: |
+    OpenAPI 3.0.3 — HTTP-контракт серверной части SoundScape, актуализированный после практической работы № 9.
+
+    Статус: основные операции реализованы в локальном Supabase (PostgreSQL/PostGIS,
+    Auth, Storage, PostgREST RPC, Edge Functions). Локальные интеграционные тесты
+    подтвердили 52 сценария, но это не означает исчерпывающего покрытия всех операций.
+    Поиск и получение аудиоисточника Audius проверены живыми запросами.
+    Успешная генерация через GigaChat пока не подтверждена; облачного развёртывания нет.
+
+    Протокол RPC: все описанные POST /rest/v1/rpc/* принимают Content-Type: application/json
+    с одним безымянным аргументом PostgreSQL jsonb. Тело запроса передаётся как camelCase JSON.
+    Контракты RPC не заменяются многопараметрическими SQL-функциями со snake_case аргументами.
+
+    Для операций с личными данными требуются apikey: sb_publishable_... и
+    Authorization: Bearer <access JWT>. Одного publishable key недостаточно.
+    Гостевые операции требуют apikey. Если клиент передаёт JWT, сервер проверяет его
+    и применяет права пользователя; доступ к данным дополнительно защищён RLS.
+    Публичные Edge Functions с verify_jwt=false проверяют apikey внутри обработчика,
+    а функции с пользовательским доступом проверяют JWT явно.
+
+    Бизнес-версия маршрутов — v1. info.version обозначает редакцию этого контракта.
+    Идентификаторы в примерах условные. URL вида example.invalid не действуют.
+servers:
+- url: http://127.0.0.1:54321
+  description: Локальный Supabase CLI; для Edge Functions требуется запущенный functions serve.
+- url: https://{projectRef}.supabase.co
+  description: Шаблон будущего облачного Supabase; SoundScape ещё не развёрнут и не проверен в облаке.
+  variables:
+    projectRef:
+      default: your-project-ref
+tags:
+- name: Geography
+- name: Playlists
+- name: Pins
+- name: Diary
+- name: Journeys
+- name: Catalog
+- name: AI
+- name: Sharing
+paths:
+  /rest/v1/rpc/get_visible_places:
+    post:
+      tags:
+      - Geography
+      summary: Места в видимом прямоугольнике карты
+      operationId: getVisiblePlaces
+      description: 'Публичные редакционные города и опубликованные PUBLIC-отметки. Личная PRIVATE-отметка доступна
+        только владельцу при JWT. UNLISTED исключены из обзора. При minLon > maxLon учитывается пересечение антимеридиана.
+        При наличии Authorization: Bearer <access JWT> сервер обязан проверить JWT и применить RLS пользователя;
+        без JWT запрос выполняется как гость.'
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisiblePlacesRequest'
+            example:
+              minLat: 35.0
+              minLon: 139.0
+              maxLat: 36.0
+              maxLon: 140.0
+              limit: 20
+              offset: 0
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlacePage'
+              example:
+                items:
+                - id: 11111111-1111-4111-8111-111111111111
+                  kind: CITY
+                  title: Токио
+                  latitude: 35.6762
+                  longitude: 139.6503
+                  description: Музыкальная атмосфера города
+                limit: 20
+                offset: 0
+                hasMore: false
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '429':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/get_nearby_places:
+    post:
+      tags:
+      - Geography
+      summary: Найти публичные места поблизости
+      operationId: getNearbyPlaces
+      description: ST_DWithin с PostGIS geography; координаты передаются по пользовательскому действию, не записываются
+        как история местоположения.
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NearbyPlacesRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlacePage'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '429':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/list_playlists:
+    post:
+      tags:
+      - Playlists
+      summary: Получить публичные или собственные плейлисты
+      operationId: listPlaylists
+      description: 'Для MINE необходим JWT. PUBLIC возвращает только опубликованные публичные подборки, UNLISTED
+        не индексируются. При наличии Authorization: Bearer <access JWT> сервер обязан проверить JWT и применить
+        RLS пользователя; без JWT запрос выполняется как гость.'
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListPlaylistsRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistPage'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '429':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/get_playlist:
+    post:
+      tags:
+      - Playlists
+      summary: Получить разрешённый плейлист по ID
+      operationId: getPlaylist
+      description: 'Только PUBLIC или владелец (JWT); UNLISTED открываются по отдельному токенизированному маршруту.
+        При наличии Authorization: Bearer <access JWT> сервер обязан проверить JWT и применить RLS пользователя;
+        без JWT запрос выполняется как гость.'
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetPlaylistRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistDetail'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/save_playlist:
+    post:
+      tags:
+      - Playlists
+      summary: Создать или изменить собственный плейлист
+      operationId: savePlaylist
+      description: Атомарно сохраняет плейлист и упорядоченный состав. Редакторские опубликованные подборки не изменяются
+        этой пользовательской RPC. Для обновления обязателен expectedRevision, несовпадение → 409.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavePlaylistRequest'
+            example:
+              title: Ночной Токио
+              description: Атмосферная музыка
+              visibility: PRIVATE
+              trackIds:
+              - 55555555-5555-4555-8555-555555555555
+              coverPath: playlist-covers/example.webp
+              genreIds:
+              - 3
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistDetail'
+              example:
+                id: 22222222-2222-4222-8222-222222222222
+                ownerId: 33333333-3333-4333-8333-333333333333
+                title: Ночной Токио
+                description: Атмосферная музыка
+                visibility: PRIVATE
+                revision: 1
+                items:
+                - track:
+                    id: 55555555-5555-4555-8555-555555555555
+                    title: Пример проверенного трека
+                    artist: Пример исполнителя
+                    durationMs: 220000
+                    availability: IN_APP
+                    provider: audius
+                  position: 1
+                coverPath: playlist-covers/example.webp
+                isEditorial: false
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/delete_playlist:
+    post:
+      tags:
+      - Playlists
+      summary: Удалить собственный плейлист
+      operationId: deletePlaylist
+      description: Только владелец, проверка версии; редакционные плейлисты защищены от удаления обычным пользователем.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteObjectRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResult'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/save_music_pin:
+    post:
+      tags:
+      - Pins
+      summary: Создать или изменить музыкальную отметку
+      operationId: saveMusicPin
+      description: 1+ существующих треков, до 5 фотографий; пути фото проверяются по Storage ownership и принадлежности
+        к записи. Для обновления expectedRevision обязателен.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveMusicPinRequest'
+            example:
+              title: Музыка у реки
+              latitude: 56.3287
+              longitude: 44.002
+              visibility: PRIVATE
+              trackIds:
+              - 55555555-5555-4555-8555-555555555555
+              photoPaths: []
+              visitDate: '2026-10-20'
+              description: Воспоминание о прогулке
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicPinDetail'
+              example:
+                id: 44444444-4444-4444-8444-444444444444
+                ownerId: 33333333-3333-4333-8333-333333333333
+                title: Музыка у реки
+                description: Воспоминание о прогулке
+                latitude: 56.3287
+                longitude: 44.002
+                visibility: PRIVATE
+                trackIds:
+                - 55555555-5555-4555-8555-555555555555
+                photoPaths: []
+                revision: 1
+                visitDate: '2026-10-20'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/save_travel_event:
+    post:
+      tags:
+      - Diary
+      summary: Создать или изменить запись музыкального дневника
+      operationId: saveTravelEvent
+      description: По умолчанию PRIVATE; 1+ треков, до 10 фото, музыкальная отметка опциональна. expectedRevision
+        обязателен при обновлении.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveTravelEventRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TravelEventDetail'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/list_travel_events:
+    post:
+      tags:
+      - Diary
+      summary: Получить собственные записи дневника
+      operationId: listTravelEvents
+      description: Возвращает только записи владельца, включая PRIVATE. Чужие PUBLIC/UNLISTED показываются через
+        отдельные разрешённые маршруты.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListTravelEventsRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TravelEventPage'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/save_music_journey:
+    post:
+      tags:
+      - Journeys
+      summary: Создать или изменить музыкальное путешествие
+      operationId: saveMusicJourney
+      description: Минимум две разрешённые точки и явный порядок. Сервер проверяет доступность каждого PIN; длительность
+        выводится из треков связанного плейлиста.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveJourneyRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyDetail'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /functions/v1/v1-search:
+    post:
+      tags:
+      - Catalog
+      summary: Единый поиск по пяти категориям
+      operationId: searchAll
+      description: Поиск по композициям, исполнителям, плейлистам, городам/местам и пользователям. Не раскрывает
+        чужой PRIVATE/UNLISTED-контент. Жанр, настроение и только IN_APP влияют на релевантные музыкальные результаты.
+        Гость использует publishable key; необязательный JWT позволяет видеть собственные разрешённые объекты после
+        проверки на сервере. Публичная Edge Function проверяет apikey на сервере (verify_jwt=false для ключевого
+        режима).
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnifiedSearchRequest'
+            example:
+              query: tokyo
+              categories:
+              - TRACK
+              - ARTIST
+              - PLAYLIST
+              - PLACE
+              - USER
+              genreIds:
+              - 3
+              onlyInApp: false
+              limit: 20
+              offset: 0
+      responses:
+        '200':
+          description: Найденные доступные объекты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSearchPage'
+              example:
+                items:
+                - category: PLACE
+                  id: 11111111-1111-4111-8111-111111111111
+                  title: Токио
+                  subtitle: Япония
+                - category: TRACK
+                  id: 55555555-5555-4555-8555-555555555555
+                  title: Пример проверенного трека
+                  subtitle: Пример исполнителя
+                  availability: IN_APP
+                limit: 20
+                offset: 0
+                hasMore: false
+        '400':
+          $ref: '#/components/responses/EdgeError'
+        '401':
+          $ref: '#/components/responses/EdgeError'
+        '403':
+          $ref: '#/components/responses/EdgeError'
+        '429':
+          $ref: '#/components/responses/EdgeError'
+        '500':
+          $ref: '#/components/responses/EdgeError'
+        '502':
+          $ref: '#/components/responses/EdgeError'
+        '503':
+          $ref: '#/components/responses/EdgeError'
+  /functions/v1/v1-search-tracks:
+    post:
+      tags:
+      - Catalog
+      summary: Найти существующие проверенные композиции
+      operationId: searchTracks
+      description: 'Отдельная Edge Function: поиск через Audius с дедупликацией, только реальные
+        provider IDs; не возвращать фиктивные внешние ссылки. Настройка JWT/publishable проверки Edge Function согласуется
+        при деплое. Публичный вызов по apikey: проверка ключа в обработчике (verify_jwt=false для режима publishable);
+        JWT пользователя необязателен, но при его наличии должен быть валидирован. Фильтры genreIds/moodIds опираются
+        на нормализованные связи track_genres/track_moods.'
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchTracksRequest'
+            example:
+              query: ambient tokyo
+              onlyInApp: true
+              limit: 20
+              offset: 0
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogPage'
+              example:
+                items:
+                - id: 55555555-5555-4555-8555-555555555555
+                  title: Пример проверенного трека
+                  artist: Пример исполнителя
+                  durationMs: 220000
+                  availability: IN_APP
+                  provider: audius
+                limit: 20
+                offset: 0
+                hasMore: false
+        '400':
+          $ref: '#/components/responses/EdgeError'
+        '401':
+          $ref: '#/components/responses/EdgeError'
+        '403':
+          $ref: '#/components/responses/EdgeError'
+        '429':
+          $ref: '#/components/responses/EdgeError'
+        '500':
+          $ref: '#/components/responses/EdgeError'
+        '502':
+          $ref: '#/components/responses/EdgeError'
+        '503':
+          $ref: '#/components/responses/EdgeError'
+  /functions/v1/v1-resolve-track:
+    post:
+      tags:
+      - Catalog
+      summary: Получить актуальный допустимый аудиоисточник
+      operationId: resolveTrack
+      description: 'Возвращает временный URL для Media3 либо точную внешнюю ссылку; не проксирует аудиобайты. URL
+        в примере явно фиктивный, не действующий аудиопоток. Права cache/download по умолчанию false до проверки.
+        Настройка JWT/publishable проверки Edge Function согласуется при деплое. Публичный вызов по apikey: проверка
+        ключа в обработчике (verify_jwt=false для режима publishable); JWT пользователя необязателен, но при его
+        наличии должен быть валидирован.'
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveTrackRequest'
+            example:
+              trackId: 55555555-5555-4555-8555-555555555555
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolvedSource'
+              example:
+                trackId: 55555555-5555-4555-8555-555555555555
+                availability: IN_APP
+                provider: audius
+                streamUrl: https://audio.example.invalid/temporary-stream
+                streamExpiresAt: '2030-01-02T12:30:00Z'
+                externalUrl: null
+                cacheAllowed: false
+                downloadAllowed: false
+        '400':
+          $ref: '#/components/responses/EdgeError'
+        '401':
+          $ref: '#/components/responses/EdgeError'
+        '403':
+          $ref: '#/components/responses/EdgeError'
+        '404':
+          $ref: '#/components/responses/EdgeError'
+        '429':
+          $ref: '#/components/responses/EdgeError'
+        '500':
+          $ref: '#/components/responses/EdgeError'
+        '502':
+          $ref: '#/components/responses/EdgeError'
+        '503':
+          $ref: '#/components/responses/EdgeError'
+  /functions/v1/v1-generate-playlist:
+    post:
+      tags:
+      - AI
+      summary: Сформировать ИИ-подборку из реальных кандидатов
+      operationId: generatePlaylist
+      description: Сервер получает реальные кандидаты, передаёт только разрешённые ID в GigaChat, валидирует JSON
+        и IDs. Это предпросмотр, не сохраняет плейлист. Не передаёт личную историю и приватный дневник. Настройка
+        JWT/publishable проверки Edge Function согласуется при деплое. Для этой операции обязателен JWT вошедшего
+        пользователя, только apikey недостаточно.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneratePlaylistRequest'
+            example:
+              mode: QUICK
+              prompt: Спокойная музыка для вечерней прогулки
+              count: 1
+              onlyInApp: true
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneratedPlaylist'
+              example:
+                title: Ночной город
+                description: Атмосферная подборка по запросу
+                items:
+                - trackId: 55555555-5555-4555-8555-555555555555
+                  position: 1
+                  reason: Соответствует выбранному настроению
+                warnings: []
+        '400':
+          $ref: '#/components/responses/EdgeError'
+        '401':
+          $ref: '#/components/responses/EdgeError'
+        '403':
+          $ref: '#/components/responses/EdgeError'
+        '422':
+          $ref: '#/components/responses/EdgeError'
+        '429':
+          $ref: '#/components/responses/EdgeError'
+        '500':
+          $ref: '#/components/responses/EdgeError'
+        '502':
+          $ref: '#/components/responses/EdgeError'
+        '503':
+          $ref: '#/components/responses/EdgeError'
+  /functions/v1/v1-open-share:
+    post:
+      tags:
+      - Sharing
+      summary: Открыть UNLISTED-материал по секретному токену
+      operationId: openShare
+      description: 'Только действующий токен; хранить в БД исключительно хеш токена. Выдавать ограниченное представление
+        объекта с соблюдением правил доступа к медиа. Отзыв немедленно блокирует последующие запросы. Настройка
+        JWT/publishable проверки Edge Function согласуется при деплое. Публичный вызов по apikey: проверка ключа
+        в обработчике (verify_jwt=false для режима publishable); JWT пользователя необязателен, но при его наличии
+        должен быть валидирован. Дополнительно проверяются expires_at и revoked_at токена.'
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenShareRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareResult'
+        '400':
+          $ref: '#/components/responses/EdgeError'
+        '401':
+          $ref: '#/components/responses/EdgeError'
+        '403':
+          $ref: '#/components/responses/EdgeError'
+        '404':
+          $ref: '#/components/responses/EdgeError'
+        '429':
+          $ref: '#/components/responses/EdgeError'
+        '500':
+          $ref: '#/components/responses/EdgeError'
+  /rest/v1/rpc/get_music_pin:
+    post:
+      tags:
+      - Pins
+      summary: Получить разрешённую музыкальную отметку
+      operationId: get_music_pin
+      description: Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный
+        JSON-объект.
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObjectIdRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicPinDetail'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/get_travel_event:
+    post:
+      tags:
+      - Diary
+      summary: Получить разрешённую запись дневника
+      operationId: get_travel_event
+      description: Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный
+        JSON-объект.
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObjectIdRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TravelEventDetail'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/get_music_journey:
+    post:
+      tags:
+      - Journeys
+      summary: Получить разрешённое путешествие
+      operationId: get_music_journey
+      description: Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный
+        JSON-объект.
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObjectIdRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyDetail'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/list_music_journeys:
+    post:
+      tags:
+      - Journeys
+      summary: Список публичных или собственных путешествий
+      operationId: list_music_journeys
+      description: Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный
+        JSON-объект.
+      security:
+      - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListMusicJourneysRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicJourneyPage'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/delete_music_pin:
+    post:
+      tags:
+      - Pins
+      summary: Удалить собственную отметку
+      operationId: delete_music_pin
+      description: Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный
+        JSON-объект.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteObjectRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResult'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/delete_travel_event:
+    post:
+      tags:
+      - Diary
+      summary: Удалить собственную запись дневника
+      operationId: delete_travel_event
+      description: Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный
+        JSON-объект.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteObjectRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResult'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /rest/v1/rpc/delete_music_journey:
+    post:
+      tags:
+      - Journeys
+      summary: Удалить собственное путешествие
+      operationId: delete_music_journey
+      description: Вспомогательный маршрут блока B. POST с одним безымянным аргументом jsonb; тело запроса — исходный
+        JSON-объект.
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteObjectRequest'
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResult'
+        '400':
+          $ref: '#/components/responses/RpcError'
+        '401':
+          $ref: '#/components/responses/RpcError'
+        '403':
+          $ref: '#/components/responses/RpcError'
+        '404':
+          $ref: '#/components/responses/RpcError'
+        '409':
+          $ref: '#/components/responses/RpcError'
+        '422':
+          $ref: '#/components/responses/RpcError'
+        '500':
+          $ref: '#/components/responses/RpcError'
+  /functions/v1/v1-manage-share:
+    post:
+      tags:
+      - Sharing
+      summary: Создание и отзыв UNLISTED-ссылок
+      operationId: manageShare
+      security:
+      - PublishableKey: []
+        UserJwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManageShareRequest'
+      responses:
+        '200':
+          description: Ссылка отозвана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManageShareResponse'
+        '201':
+          description: Ссылка создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManageShareResponse'
+        '400': &id001
+          $ref: '#/components/responses/EdgeError'
+        '401': &id002
+          $ref: '#/components/responses/EdgeError'
+        '403': &id003
+          $ref: '#/components/responses/EdgeError'
+        '404': &id004
+          $ref: '#/components/responses/EdgeError'
+        '422': &id005
+          $ref: '#/components/responses/EdgeError'
+        '429': &id006
+          $ref: '#/components/responses/EdgeError'
+        '500': &id007
+          $ref: '#/components/responses/EdgeError'
+        '502': &id008
+          $ref: '#/components/responses/EdgeError'
+        '503': &id009
+          $ref: '#/components/responses/EdgeError'
+  /functions/v1/v1-media:
+    post:
+      tags:
+      - Sharing
+      summary: Защищённая выдача изображений
+      operationId: getMedia
+      description: 'При успешном запросе возвращает бинарное изображение, Cache-Control: no-store. Не выдаёт прямой
+        URL к Storage.'
+      security:
+      - PublishableKey: []
+      parameters:
+      - in: header
+        name: X-SoundScape-Share-Token
+        required: false
+        schema:
+          type: string
+          minLength: 32
+          maxLength: 256
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaRequest'
+      responses:
+        '200':
+          description: Изображение
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '422': *id005
+        '429': *id006
+        '500': *id007
+        '502': *id008
+        '503': *id009
+components:
+  securitySchemes:
+    PublishableKey:
+      type: apiKey
+      in: header
+      name: apikey
+      description: Публичный ключ Supabase (sb_publishable_...). Не секрет, не JWT и не право на чужие данные.
+    UserJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'Access JWT Supabase Auth от вошедшего пользователя; передавать в Authorization: Bearer <token>.'
+  schemas:
+    Visibility:
+      type: string
+      description: Доступность пользовательского объекта.
+      enum:
+      - PUBLIC
+      - UNLISTED
+      - PRIVATE
+    ErrorEdge:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: Некорректные параметры запроса
+            requestId:
+              type: string
+              example: req_7e12
+          required:
+          - code
+          - message
+      required:
+      - error
+    ErrorPostgrest:
+      type: object
+      properties:
+        code:
+          type: string
+          example: PT409
+        message:
+          type: string
+          example: VERSION_CONFLICT
+        details:
+          type: string
+          nullable: true
+        hint:
+          type: string
+          nullable: true
+      required:
+      - code
+      - message
+    PlaceSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - CITY
+          - PIN
+        title:
+          type: string
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        description:
+          type: string
+          nullable: true
+        playlistId:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID доступного редакционного плейлиста, если он опубликован.
+        coverPath:
+          type: string
+          nullable: true
+          description: Путь к опубликованной обложке места; не предоставляет обход прав Storage.
+      required:
+      - id
+      - kind
+      - title
+      - latitude
+      - longitude
+    PlacePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaceSummary'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - limit
+      - offset
+      - hasMore
+    TrackView:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        artist:
+          type: string
+          description: Отображаемое имя исполнителя или нескольких исполнителей, вычисленное из artists и track_artists.
+        durationMs:
+          type: integer
+          minimum: 1
+        availability:
+          type: string
+          enum:
+          - IN_APP
+          - EXTERNAL_ONLY
+          description: IN_APP или EXTERNAL_ONLY; определяется сервером из проверенных track_sources, не хранится
+            отдельно в tracks.
+        provider:
+          type: string
+          nullable: true
+          description: Выбранный музыкальный источник из track_sources при наличии.
+      required:
+      - id
+      - title
+      - artist
+      - durationMs
+      - availability
+    CatalogPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackView'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - limit
+      - offset
+      - hasMore
+    PlaylistItem:
+      type: object
+      properties:
+        track:
+          $ref: '#/components/schemas/TrackView'
+        position:
+          type: integer
+          minimum: 1
+      required:
+      - track
+      - position
+    PlaylistSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        revision:
+          type: integer
+          minimum: 1
+        isEditorial:
+          type: boolean
+        placeId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Необязательная связь с редакционным местом.
+        coverPath:
+          type: string
+          nullable: true
+          description: Путь к разрешённой обложке; проверка доступа к Storage выполняется отдельно.
+        genreIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          description: Идентификаторы жанров из справочника genres (smallint).
+          default: []
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          description: Идентификаторы тематических тегов из tags (smallint).
+          default: []
+      required:
+      - id
+      - ownerId
+      - title
+      - visibility
+      - revision
+      - isEditorial
+    PlaylistDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        revision:
+          type: integer
+          minimum: 1
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaylistItem'
+        placeId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Необязательная связь с редакционным местом.
+        coverPath:
+          type: string
+          nullable: true
+          description: Путь к разрешённой обложке; проверка доступа к Storage выполняется отдельно.
+        genreIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          description: Идентификаторы жанров из справочника genres (smallint).
+          default: []
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          description: Идентификаторы тематических тегов из tags (smallint).
+          default: []
+        isEditorial:
+          type: boolean
+          description: Признак официальной редакционной подборки.
+      required:
+      - id
+      - ownerId
+      - title
+      - visibility
+      - revision
+      - items
+      description: Полные данные плейлиста в клиентском DTO; связи с жанрами/тегами возвращаются как идентификаторы.
+    PlaylistPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaylistSummary'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - limit
+      - offset
+      - hasMore
+    MusicPinDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        trackIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        photoPaths:
+          type: array
+          items:
+            type: string
+          maxItems: 5
+        revision:
+          type: integer
+          minimum: 1
+        visitDate:
+          type: string
+          format: date
+          nullable: true
+          description: Необязательная дата посещения музыкальной отметки.
+      required:
+      - id
+      - ownerId
+      - title
+      - latitude
+      - longitude
+      - visibility
+      - trackIds
+      - photoPaths
+      - revision
+    TravelEventDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        eventDate:
+          type: string
+          format: date
+        locationName:
+          type: string
+          nullable: true
+          description: Необязательное название места; при отсутствии должны быть координаты или musicPinId.
+        body:
+          type: string
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        musicPinId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Привязанная отметка при наличии.
+        trackIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        photoPaths:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        revision:
+          type: integer
+          minimum: 1
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          nullable: true
+          description: Широта точки дневника, заполняется вместе с longitude.
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          nullable: true
+          description: Долгота точки дневника, заполняется вместе с latitude.
+      required:
+      - id
+      - ownerId
+      - title
+      - eventDate
+      - visibility
+      - trackIds
+      - photoPaths
+      - revision
+      description: 'Указать хотя бы одно местоположение: locationName, musicPinId или пару latitude/longitude. Координаты
+        передаются обе или ни одна; проверяется сервером.'
+    TravelEventPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TravelEventDetail'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - limit
+      - offset
+      - hasMore
+    JourneyStop:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+          - PLACE
+          - PIN
+        id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          minimum: 1
+      required:
+      - kind
+      - id
+      - position
+    JourneyDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        playlistId:
+          type: string
+          format: uuid
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyStop'
+          minItems: 2
+        revision:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - ownerId
+      - title
+      - visibility
+      - stops
+      - revision
+    GeneratedItem:
+      type: object
+      properties:
+        trackId:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          nullable: true
+      required:
+      - trackId
+      - position
+    GeneratedPlaylist:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneratedItem'
+          minItems: 1
+        warnings:
+          type: array
+          items:
+            type: string
+      required:
+      - title
+      - description
+      - items
+      - warnings
+    ResolvedSource:
+      type: object
+      properties:
+        trackId:
+          type: string
+          format: uuid
+        availability:
+          type: string
+          enum:
+          - IN_APP
+          - EXTERNAL_ONLY
+        provider:
+          type: string
+        streamUrl:
+          type: string
+          format: uri
+          nullable: true
+        streamExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        externalUrl:
+          type: string
+          format: uri
+          nullable: true
+        cacheAllowed:
+          type: boolean
+        downloadAllowed:
+          type: boolean
+      required:
+      - trackId
+      - availability
+      - provider
+      - cacheAllowed
+      - downloadAllowed
+      description: streamUrl выдаётся только для IN_APP, externalUrl — для EXTERNAL_ONLY; временный URL нельзя сохранять
+        постоянно.
+    ShareResult:
+      type: object
+      properties:
+        objectType:
+          type: string
+          enum:
+          - PLAYLIST
+          - MUSIC_PIN
+          - TRAVEL_EVENT
+          - JOURNEY
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        payload:
+          type: object
+          properties: {}
+          additionalProperties: true
+          description: Санитизированное представление только разрешённого объекта; без owner private fields, service
+            keys и внутренних storage paths.
+      required:
+      - objectType
+      - id
+      - title
+      - payload
+    ActionResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+      required:
+      - success
+      - id
+    VisiblePlacesRequest:
+      type: object
+      properties:
+        minLat:
+          type: number
+          minimum: -90
+          maximum: 90
+        minLon:
+          type: number
+          minimum: -180
+          maximum: 180
+        maxLat:
+          type: number
+          minimum: -90
+          maximum: 90
+        maxLon:
+          type: number
+          minimum: -180
+          maximum: 180
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+      required:
+      - minLat
+      - minLon
+      - maxLat
+      - maxLon
+    NearbyPlacesRequest:
+      type: object
+      properties:
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        radiusM:
+          type: integer
+          minimum: 1
+          maximum: 50000
+          default: 1000
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+      required:
+      - latitude
+      - longitude
+      - radiusM
+    ListPlaylistsRequest:
+      type: object
+      properties:
+        scope:
+          type: string
+          enum:
+          - PUBLIC
+          - MINE
+          default: PUBLIC
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+    GetPlaylistRequest:
+      type: object
+      properties:
+        playlistId:
+          type: string
+          format: uuid
+      required:
+      - playlistId
+    SavePlaylistRequest:
+      type: object
+      properties:
+        playlistId:
+          type: string
+          description: Необязательный стабильный UUID, генерируемый Android до первой отправки. При обновлении обязателен
+            вместе с expectedRevision.
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        trackIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 100
+        expectedRevision:
+          type: integer
+          minimum: 1
+          description: Обязателен при изменении существующего объекта.
+        coverPath:
+          type: string
+          nullable: true
+          description: Путь к собственной обложке в Storage; сервер проверяет доступ и принадлежность.
+        genreIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          maxItems: 30
+          description: Необязательные жанры плейлиста из справочника genres.
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          maxItems: 30
+          description: Необязательные тематические теги плейлиста.
+      required:
+      - title
+      - visibility
+      - trackIds
+      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении
+        передаются UUID и expectedRevision >=1. При повторе создания с тем же UUID сервер возвращает конфликт 409,
+        не перезаписывая объект.
+      oneOf:
+      - not:
+          required:
+          - expectedRevision
+      - required:
+        - playlistId
+        - expectedRevision
+    DeleteObjectRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        expectedRevision:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - expectedRevision
+    SaveMusicPinRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Необязательный стабильный UUID, генерируемый Android до первой отправки. При обновлении обязателен
+            вместе с expectedRevision.
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        description:
+          type: string
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        trackIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 100
+        photoPaths:
+          type: array
+          items:
+            type: string
+          maxItems: 5
+        expectedRevision:
+          type: integer
+          minimum: 1
+        visitDate:
+          type: string
+          format: date
+          nullable: true
+          description: Необязательная дата посещения музыкальной отметки.
+      required:
+      - title
+      - latitude
+      - longitude
+      - visibility
+      - trackIds
+      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении
+        передаются UUID и expectedRevision >=1. При повторе создания с тем же UUID сервер возвращает конфликт 409,
+        не перезаписывая объект.
+      oneOf:
+      - not:
+          required:
+          - expectedRevision
+      - required:
+        - id
+        - expectedRevision
+    SaveTravelEventRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Необязательный стабильный UUID, генерируемый Android до первой отправки. При обновлении обязателен
+            вместе с expectedRevision.
+          format: uuid
+        musicPinId:
+          type: string
+          description: Необязательная связь с отметкой.
+          format: uuid
+          nullable: true
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        eventDate:
+          type: string
+          format: date
+        locationName:
+          type: string
+          minLength: 1
+          nullable: true
+          description: Необязательное название места; при отсутствии должны быть координаты или musicPinId.
+        body:
+          type: string
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        trackIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 100
+        photoPaths:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        expectedRevision:
+          type: integer
+          minimum: 1
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          nullable: true
+          description: Широта точки дневника, заполняется вместе с longitude.
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          nullable: true
+          description: Долгота точки дневника, заполняется вместе с latitude.
+      required:
+      - title
+      - eventDate
+      - trackIds
+      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении
+        передаются UUID и expectedRevision >=1. При повторе создания с тем же UUID сервер возвращает конфликт 409,
+        не перезаписывая объект.
+      oneOf:
+      - not:
+          required:
+          - expectedRevision
+      - required:
+        - id
+        - expectedRevision
+    ListTravelEventsRequest:
+      type: object
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+    SaveJourneyRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Необязательный стабильный UUID, генерируемый Android до первой отправки. При обновлении обязателен
+            вместе с expectedRevision.
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        playlistId:
+          type: string
+          description: Может быть опущен до сохранения плейлиста.
+          format: uuid
+          nullable: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyStop'
+          minItems: 2
+          maxItems: 50
+        expectedRevision:
+          type: integer
+          minimum: 1
+      required:
+      - title
+      - visibility
+      - stops
+      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении
+        передаются UUID и expectedRevision >=1. При повторе создания с тем же UUID сервер возвращает конфликт 409,
+        не перезаписывая объект.
+      oneOf:
+      - not:
+          required:
+          - expectedRevision
+      - required:
+        - id
+        - expectedRevision
+    SearchTracksRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 200
+        onlyInApp:
+          type: boolean
+          default: false
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+        genreIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          maxItems: 20
+          description: Фильтр по жанрам из genres.id (smallint).
+        moodIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          maxItems: 20
+          description: Фильтр по настроениям из moods.id (smallint).
+      required:
+      - query
+      description: Поиск по каталогу музыкальных записей (узкая операция, в дополнение к единому поиску по пяти
+        категориям).
+    ResolveTrackRequest:
+      type: object
+      properties:
+        trackId:
+          type: string
+          format: uuid
+      required:
+      - trackId
+    GeneratePlaylistRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - QUICK
+          - ADVANCED
+          - PLACE
+          - JOURNEY
+        prompt:
+          type: string
+          maxLength: 1000
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+          description: Необязательное свободное описание жанра для GigaChat. Если переданы genreIds, для фильтрации
+            приоритетны ID.
+        mood:
+          type: string
+          nullable: true
+          description: Необязательное свободное описание настроения. Если переданы moodIds, для фильтрации приоритетны
+            ID.
+        count:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        onlyInApp:
+          type: boolean
+          default: false
+        placeId:
+          type: string
+          format: uuid
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyStop'
+          minItems: 2
+        genreIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          maxItems: 20
+          description: Фильтр по жанрам из genres.id (smallint).
+        moodIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+          maxItems: 20
+          description: Фильтр по настроениям из moods.id (smallint).
+      required:
+      - mode
+      - count
+      description: Режим QUICK требует prompt; ADVANCED — тему или жанр/настроение; PLACE требует placeId, JOURNEY
+        требует минимум две stops. Условные правила проверяются сервером.
+    OpenShareRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 32
+          maxLength: 256
+      required:
+      - token
+    UnifiedSearchRequest:
+      type: object
+      description: Общий поиск по пяти категориям; фильтры жанров и настроений относятся к музыкальным сущностям.
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 200
+        categories:
+          type: array
+          items:
+            type: string
+            enum:
+            - TRACK
+            - ARTIST
+            - PLAYLIST
+            - PLACE
+            - USER
+          uniqueItems: true
+          minItems: 1
+          maxItems: 5
+          description: Если не задано, искать по всем пяти категориям.
+        genreIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+        moodIds:
+          type: array
+          items:
+            type: integer
+            format: int32
+            minimum: 1
+          uniqueItems: true
+        onlyInApp:
+          type: boolean
+          default: false
+          description: Для музыкальных результатов учитывать только доступные для воспроизведения внутри приложения
+            записи.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+      required:
+      - query
+    UnifiedSearchItem:
+      type: object
+      description: Краткий результат для единого списка. Полная карточка загружается отдельным маршрутом.
+      properties:
+        category:
+          type: string
+          enum:
+          - TRACK
+          - ARTIST
+          - PLAYLIST
+          - PLACE
+          - USER
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          description: Название трека, исполнителя, плейлиста, места или имя пользователя.
+        subtitle:
+          type: string
+          nullable: true
+        coverPath:
+          type: string
+          nullable: true
+          description: Только разрешённая обложка; личные пути не выдаются.
+        availability:
+          type: string
+          enum:
+          - IN_APP
+          - EXTERNAL_ONLY
+          description: Передаётся только для результата категории TRACK.
+      required:
+      - category
+      - id
+      - title
+    UnifiedSearchPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnifiedSearchItem'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+        offset:
+          type: integer
+          minimum: 0
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - limit
+      - offset
+      - hasMore
+    ObjectIdRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+      required:
+      - id
+    ListMusicJourneysRequest:
+      type: object
+      properties:
+        scope:
+          type: string
+          enum:
+          - PUBLIC
+          - MINE
+          default: PUBLIC
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+    MusicJourneyPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyDetail'
+        limit:
+          type: integer
+        offset:
+          type: integer
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - limit
+      - offset
+      - hasMore
+    ManageShareRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+          - CREATE
+          - REVOKE
+        objectType:
+          type: string
+          enum:
+          - PLAYLIST
+          - MUSIC_PIN
+          - TRAVEL_EVENT
+          - JOURNEY
+        objectId:
+          type: string
+          format: uuid
+        shareId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - action
+      description: CREATE требует objectType/objectId; REVOKE требует shareId. Сервер проводит проверку владельца.
+    ManageShareResponse:
+      type: object
+      additionalProperties: true
+      description: 'CREATE: shareId, token (выдаётся только раз), objectType, objectId, expiresAt. REVOKE: revoked=true.'
+    MediaRequest:
+      type: object
+      properties:
+        objectType:
+          type: string
+          enum:
+          - PIN
+          - EVENT
+          - PLAYLIST
+          - PLACE
+        objectId:
+          type: string
+          format: uuid
+        photoId:
+          type: string
+          format: uuid
+      required:
+      - objectType
+      - objectId
+      description: Для PIN и EVENT обязателен photoId; для PLAYLIST и PLACE запрещён. Секрет UNLISTED — в X-SoundScape-Share-Token.
+  responses:
+    RpcError:
+      description: Ошибка PostgREST/RPC. Причина определяется HTTP-кодом и полями code/message.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorPostgrest'
+    EdgeError:
+      description: Ошибка Edge Function. Причина определяется HTTP-кодом и полями error.code/error.message.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEdge'
