@@ -1,0 +1,1582 @@
+{
+  "info": {
+    "name": "SoundScape — Practice 11 — Negative API tests — LOCAL ONLY",
+    "description": "24 negative scenarios against an isolated local Supabase. No production calls, no live music providers, no user passwords. Separate from Practice 10 manual collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:54321"
+    },
+    {
+      "key": "publishableKey",
+      "value": "",
+      "type": "secret"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const baseUrl = String(pm.variables.get(\"baseUrl\") || \"\").replace(/\\/$/, \"\");",
+          "if (baseUrl !== \"http://127.0.0.1:54321\" && baseUrl !== \"http://localhost:54321\") {",
+          "  console.error(\"BLOCKED: Practice 11 negative collection is LOCAL ONLY\");",
+          "  pm.execution.skipRequest();",
+          "}",
+          "if (!pm.variables.get(\"publishableKey\")) {",
+          "  console.error(\"BLOCKED: provide a local Supabase publishable/anon key\");",
+          "  pm.execution.skipRequest();",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 — get_visible_places — Invalid latitude in viewport",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/get_visible_places",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "get_visible_places"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"minLat\": 91,\n  \"maxLat\": 92,\n  \"minLon\": 10,\n  \"maxLon\": 20\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 422. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 422]\", function () {",
+              "  pm.expect([400, 422]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "02 — get_nearby_places — Invalid latitude",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/get_nearby_places",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "get_nearby_places"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 91,\n  \"longitude\": 20,\n  \"radiusM\": 1000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 422. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 422]\", function () {",
+              "  pm.expect([400, 422]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "03 — list_playlists — Unknown list scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/list_playlists",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "list_playlists"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"scope\": \"NOT_A_SCOPE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 422. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 422]\", function () {",
+              "  pm.expect([400, 422]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "04 — get_playlist — Malformed playlist UUID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/get_playlist",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "get_playlist"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"playlistId\": \"not-a-uuid\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 422. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 422]\", function () {",
+              "  pm.expect([400, 422]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "05 — save_playlist — Anonymous playlist mutation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/save_playlist",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "save_playlist"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Test\",\n  \"visibility\": \"PRIVATE\",\n  \"trackIds\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [401]\", function () {",
+              "  pm.expect([401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "06 — delete_playlist — Anonymous delete",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/delete_playlist",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "delete_playlist"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"not-a-uuid\",\n  \"expectedRevision\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 401]\", function () {",
+              "  pm.expect([400, 401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "07 — save_music_pin — Anonymous music pin mutation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/save_music_pin",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "save_music_pin"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Test\",\n  \"latitude\": 56,\n  \"longitude\": 44,\n  \"trackIds\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [401]\", function () {",
+              "  pm.expect([401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "08 — save_travel_event — Anonymous diary mutation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/save_travel_event",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "save_travel_event"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Test\",\n  \"eventDate\": \"2026-11-07\",\n  \"trackIds\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [401]\", function () {",
+              "  pm.expect([401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "09 — list_travel_events — Anonymous diary listing",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/list_travel_events",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "list_travel_events"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limit\": 20,\n  \"offset\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [401]\", function () {",
+              "  pm.expect([401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "10 — save_music_journey — Anonymous journey mutation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/save_music_journey",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "save_music_journey"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Test\",\n  \"stops\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [401]\", function () {",
+              "  pm.expect([401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "11 — v1-search — Missing required query",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/functions/v1/v1-search",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "v1-search"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400]\", function () {",
+              "  pm.expect([400]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.error).to.be.an(\"object\");",
+              "  pm.expect(data.error.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.message).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.requestId).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "12 — v1-search-tracks — Missing required query",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/functions/v1/v1-search-tracks",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "v1-search-tracks"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400]\", function () {",
+              "  pm.expect([400]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.error).to.be.an(\"object\");",
+              "  pm.expect(data.error.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.message).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.requestId).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "13 — v1-resolve-track — Malformed track UUID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/functions/v1/v1-resolve-track",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "v1-resolve-track"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"trackId\": \"not-a-uuid\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400]\", function () {",
+              "  pm.expect([400]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.error).to.be.an(\"object\");",
+              "  pm.expect(data.error.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.message).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.requestId).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "14 — v1-generate-playlist — Anonymous AI generation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/functions/v1/v1-generate-playlist",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "v1-generate-playlist"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mode\": \"QUICK\",\n  \"prompt\": \"lofi\",\n  \"count\": 3\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [401]\", function () {",
+              "  pm.expect([401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.error).to.be.an(\"object\");",
+              "  pm.expect(data.error.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.message).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.requestId).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "15 — v1-open-share — Too-short UNLISTED token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/functions/v1/v1-open-share",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "v1-open-share"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"bad\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400]\", function () {",
+              "  pm.expect([400]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.error).to.be.an(\"object\");",
+              "  pm.expect(data.error.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.message).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.requestId).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "16 — get_music_pin — Malformed music pin UUID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/get_music_pin",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "get_music_pin"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"not-a-uuid\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 422. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 422]\", function () {",
+              "  pm.expect([400, 422]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "17 — get_travel_event — Malformed diary UUID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/get_travel_event",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "get_travel_event"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"not-a-uuid\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 422. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 422]\", function () {",
+              "  pm.expect([400, 422]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "18 — get_music_journey — Malformed journey UUID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/get_music_journey",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "get_music_journey"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"not-a-uuid\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 422. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 422]\", function () {",
+              "  pm.expect([400, 422]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "19 — list_music_journeys — Unknown journey list scope",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/list_music_journeys",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "list_music_journeys"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"scope\": \"WRONG\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 422. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 422]\", function () {",
+              "  pm.expect([400, 422]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "20 — delete_music_pin — Anonymous music pin deletion",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/delete_music_pin",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "delete_music_pin"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"not-a-uuid\",\n  \"expectedRevision\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 401]\", function () {",
+              "  pm.expect([400, 401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "21 — delete_travel_event — Anonymous diary deletion",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/delete_travel_event",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "delete_travel_event"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"not-a-uuid\",\n  \"expectedRevision\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 401]\", function () {",
+              "  pm.expect([400, 401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "22 — delete_music_journey — Anonymous journey deletion",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/rest/v1/rpc/delete_music_journey",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rest",
+            "v1",
+            "rpc",
+            "delete_music_journey"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"not-a-uuid\",\n  \"expectedRevision\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400, 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400, 401]\", function () {",
+              "  pm.expect([400, 401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.message).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "23 — v1-manage-share — Anonymous share management",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/functions/v1/v1-manage-share",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "v1-manage-share"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"CREATE\",\n  \"objectType\": \"PLAYLIST\",\n  \"objectId\": \"not-a-uuid\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 401. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [401]\", function () {",
+              "  pm.expect([401]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.error).to.be.an(\"object\");",
+              "  pm.expect(data.error.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.message).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.requestId).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "24 — v1-media — Invalid media object type",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{publishableKey}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/functions/v1/v1-media",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "functions",
+            "v1",
+            "v1-media"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"objectType\": \"UNSUPPORTED\",\n  \"objectId\": \"not-a-uuid\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Local-only negative scenario. Expected HTTP status: 400. This request must not mutate project data."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP status in [400]\", function () {",
+              "  pm.expect([400]).to.include(pm.response.code);",
+              "});",
+              "pm.test(\"Response contains error code and message\", function () {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.error).to.be.an(\"object\");",
+              "  pm.expect(data.error.code).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.message).to.be.a(\"string\").and.not.empty;",
+              "  pm.expect(data.error.requestId).to.be.a(\"string\").and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    }
+  ]
+}
