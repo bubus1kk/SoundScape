@@ -1,0 +1,167 @@
+# SoundScape practice 11 — LOCAL CI only.
+# The workflow is a local draft. It never links to or deploys to the hosted Supabase project.
+name: SoundScape / Server tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/backend]
+    paths:
+      - '.github/workflows/soundscape-server-tests.yml'
+      - 'backend/supabase/**'
+      - 'backend/tests/postman/**'
+  pull_request:
+    paths:
+      - '.github/workflows/soundscape-server-tests.yml'
+      - 'backend/supabase/**'
+      - 'backend/tests/postman/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soundscape-server-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deno-unit:
+    name: Deno unit / 36 assertions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+
+      - name: Run Deno unit tests
+        run: deno test ./supabase/tests/unit/
+
+  local-db-api:
+    name: Local PostgreSQL (pgTAP) and negative API
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - name: Check test inputs
+        run: |
+          test -f supabase/config.toml
+          test -f supabase/tests/database/01_schema_security_test.sql
+          test -f supabase/tests/database/02_rls_visibility_test.sql
+          test -f supabase/tests/database/03_constraints_test.sql
+          test -f tests/postman/SoundScape_Practice11_Negative_Local.postman_collection.json
+
+      - name: Start local Supabase (isolated Docker stack)
+        run: supabase start
+
+      - name: Run pgTAP (52 assertions)
+        run: supabase test db
+
+      - name: Install Newman
+        run: npm install --global newman@6
+
+      - name: Run negative API checks (24 requests, 48 assertions)
+        run: |
+          set -euo pipefail
+
+          # Supabase CLI exports LOCAL credentials; never take secrets from GitHub.
+          local_key="$(supabase status -o env | sed -n 's/^ANON_KEY=//p' | tail -n 1)"
+          local_key="${local_key%\"}"
+          local_key="${local_key#\"}"
+          if [[ -z "${local_key}" ]]; then
+            echo 'Local ANON_KEY was not provided by Supabase CLI' >&2
+            exit 1
+          fi
+          echo "::add-mask::${local_key}"
+
+          # 'supabase start' already serves Edge Functions. Do NOT run
+          # 'supabase functions serve' a second time: restarting the runtime
+          # while Newman is running can cause transient Kong 502 responses.
+          #
+          # Warm up each local handler and require the exact expected status.
+          # These invalid requests fail before any DB write or provider call.
+          check_edge() {
+            local slug="$1"
+            local payload="$2"
+            local expected="$3"
+            local actual
+            for attempt in $(seq 1 30); do
+              actual="$(curl -sS --max-time 6 -o /dev/null -w '%{http_code}' \
+                -X POST "http://127.0.0.1:54321/functions/v1/${slug}" \
+                -H "apikey: ${local_key}" \
+                -H 'Content-Type: application/json' \
+                --data "${payload}" || true)"
+              if [[ "${actual}" == "${expected}" ]]; then
+                echo "Edge ready: ${slug} (${actual})"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Edge not ready: ${slug}; expected ${expected}, got ${actual}" >&2
+            return 1
+          }
+
+          check_edge v1-search '{}' 400
+          check_edge v1-search-tracks '{}' 400
+          check_edge v1-resolve-track '{"trackId":"invalid-uuid"}' 400
+          check_edge v1-generate-playlist '{}' 401
+          check_edge v1-open-share '{"token":"short"}' 400
+          check_edge v1-manage-share '{}' 401
+          check_edge v1-media '{"objectType":"INVALID"}' 400
+
+          newman run 'tests/postman/SoundScape_Practice11_Negative_Local.postman_collection.json' \
+            --env-var 'baseUrl=http://127.0.0.1:54321' \
+            --env-var "publishableKey=${local_key}" \
+            --reporters cli,json \
+            --reporter-json-export "${RUNNER_TEMP}/soundscape-newman-results.json"
+
+          # A zero exit status is not sufficient if requests were skipped.
+          python3 - "${RUNNER_TEMP}/soundscape-newman-results.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          run = report['run']
+          executions = run.get('executions', [])
+          completed = sum(1 for result in executions if result.get('response') is not None)
+          assertions = run['stats']['assertions']
+          total_assertions = assertions['total']
+          failed_assertions = assertions['failed']
+          print(f'Executed responses: {completed}/24; assertions: {total_assertions}/48; failed: {failed_assertions}')
+          if completed != 24 or total_assertions != 48 or failed_assertions != 0:
+              raise SystemExit('CI validation failed: missing/skipped requests or failed assertions')
+          PY
+
+      - name: Report local Edge logs when test job fails
+        if: failure()
+        run: |
+          edge_container="$(docker ps -a --format '{{.Names}}' | grep '^supabase_edge_runtime_' | head -n 1 || true)"
+          if [[ -n "${edge_container}" ]]; then
+            docker logs --tail 100 "${edge_container}" || true
+          else
+            echo 'Local Edge Runtime container not found.'
+          fi
