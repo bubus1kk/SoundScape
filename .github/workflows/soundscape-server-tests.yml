@@ -97,32 +97,40 @@ jobs:
           fi
           echo "::add-mask::${local_key}"
 
-          # Explicitly serve functions. The project sets verify_jwt=false and
-          # performs its own apikey + user JWT checks in _shared/core.ts.
-          supabase functions serve --no-verify-jwt > "${RUNNER_TEMP}/soundscape-edge.log" 2>&1 &
-          edge_pid=$!
-          trap 'kill "${edge_pid}" 2>/dev/null || true' EXIT
+          # 'supabase start' already serves Edge Functions. Do NOT run
+          # 'supabase functions serve' a second time: restarting the runtime
+          # while Newman is running can cause transient Kong 502 responses.
+          #
+          # Warm up each local handler and require the exact expected status.
+          # These invalid requests fail before any DB write or provider call.
+          check_edge() {
+            local slug="$1"
+            local payload="$2"
+            local expected="$3"
+            local actual
+            for attempt in $(seq 1 30); do
+              actual="$(curl -sS --max-time 6 -o /dev/null -w '%{http_code}' \
+                -X POST "http://127.0.0.1:54321/functions/v1/${slug}" \
+                -H "apikey: ${local_key}" \
+                -H 'Content-Type: application/json' \
+                --data "${payload}" || true)"
+              if [[ "${actual}" == "${expected}" ]]; then
+                echo "Edge ready: ${slug} (${actual})"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Edge not ready: ${slug}; expected ${expected}, got ${actual}" >&2
+            return 1
+          }
 
-          # Probe the actual application handler, not just the HTTP gateway.
-          # A valid local key + missing query must yield the intentional 400.
-          ready=0
-          for attempt in $(seq 1 45); do
-            status="$(curl -sS --max-time 6 -o /dev/null -w '%{http_code}' \
-              -X POST 'http://127.0.0.1:54321/functions/v1/v1-search' \
-              -H "apikey: ${local_key}" \
-              -H 'Content-Type: application/json' \
-              --data '{}' || true)"
-            if [[ "${status}" == '400' ]]; then
-              ready=1
-              break
-            fi
-            sleep 2
-          done
-          if [[ "${ready}" != 1 ]]; then
-            echo 'Edge Function did not become ready with expected HTTP 400' >&2
-            tail -n 80 "${RUNNER_TEMP}/soundscape-edge.log" >&2 || true
-            exit 1
-          fi
+          check_edge v1-search '{}' 400
+          check_edge v1-search-tracks '{}' 400
+          check_edge v1-resolve-track '{"trackId":"invalid-uuid"}' 400
+          check_edge v1-generate-playlist '{}' 401
+          check_edge v1-open-share '{"token":"short"}' 400
+          check_edge v1-manage-share '{}' 401
+          check_edge v1-media '{"objectType":"INVALID"}' 400
 
           newman run 'tests/postman/SoundScape_Practice11_Negative_Local.postman_collection.json' \
             --env-var 'baseUrl=http://127.0.0.1:54321' \
@@ -151,6 +159,9 @@ jobs:
       - name: Report local Edge logs when test job fails
         if: failure()
         run: |
-          if [[ -f "${RUNNER_TEMP}/soundscape-edge.log" ]]; then
-            tail -n 100 "${RUNNER_TEMP}/soundscape-edge.log"
+          edge_container="$(docker ps -a --format '{{.Names}}' | grep '^supabase_edge_runtime_' | head -n 1 || true)"
+          if [[ -n "${edge_container}" ]]; then
+            docker logs --tail 100 "${edge_container}" || true
+          else
+            echo 'Local Edge Runtime container not found.'
           fi
