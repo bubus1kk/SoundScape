@@ -1,0 +1,4 @@
+# Composable functions follow the official Compose naming convention.
+naming:
+  FunctionNaming:
+    ignoreAnnotated: ['Composable']

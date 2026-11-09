@@ -1,0 +1,44 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+.idea/
+
+# Android build outputs and local tooling (including nested modules)
+**/build/
+**/.gradle/
+**/.kotlin/
+**/.idea/
+**/captures/
+**/.cxx/
+**/.externalNativeBuild/
+**/local.properties
+
+# Secrets and private local configuration
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+keystore.properties
+secrets.properties
+*.local.properties
+.aws/
+.codex/
+.agents/
+
+# Private project control documents (at any depth)
+SOUNDSCAPE_CONTROL.md
+AGENTS.md
+requirements-detailed.md

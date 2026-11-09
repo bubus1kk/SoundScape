@@ -1,0 +1,73 @@
+name: SoundScape / Android
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soundscape-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  domain-jvm:
+    runs-on: ubuntu-24.04
+    container: eclipse-temurin:25-jdk
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: SoundScapeApp
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - uses: gradle/actions/wrapper-validation@v4.4.2
+      - name: Build Domain without Android SDK
+        run: |
+          test ! -f local.properties
+          unset ANDROID_HOME ANDROID_SDK_ROOT
+          sh ./gradlew -PdomainOnly=true :core:domain:build :core:domain:dependencies --no-daemon
+
+  android-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: SoundScapeApp
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4.4.2
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Install required SDK Platform
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - name: Build debug APK
+        run: sh ./gradlew :app:assembleDebug --no-daemon
+      - name: Unit tests
+        run: sh ./gradlew :app:testDebugUnitTest :presentation:testDebugUnitTest --no-daemon
+      - name: Detekt
+        run: sh ./gradlew detekt --no-daemon
+      - name: Android Lint
+        run: sh ./gradlew :app:lintDebug :core:data:lintDebug :presentation:lintDebug --no-daemon
+      - name: Diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: android-reports
+          path: |
+            SoundScapeApp/**/build/reports/
+            SoundScapeApp/**/build/test-results/
+          if-no-files-found: ignore
+      - name: Debug APK
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: soundscape-debug
+          path: SoundScapeApp/app/build/outputs/apk/debug/*.apk
