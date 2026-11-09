@@ -47,6 +47,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4.4.2
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
       - name: Install required SDK Platform
         run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
       - name: Build debug APK
