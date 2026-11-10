@@ -1,0 +1,55 @@
+{
+  "css": "https://fonts.googleapis.com/css?family=Manrope:600,700%7CInter:400,500,600&subset=cyrillic",
+  "files": [
+    {
+      "file": "src/main/res/font/inter_regular.ttf",
+      "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZthjQ.ttf",
+      "sha256": "a6e51352bb895b85be84dc4e87e14f0fa3883eb58655bdfd07cf958a990f2433",
+      "weight": 400,
+      "static": true,
+      "latin_cyrillic_checked": true
+    },
+    {
+      "file": "src/main/res/font/inter_medium.ttf",
+      "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fAZthjQ.ttf",
+      "sha256": "7859d14be5c596ed7cef878fc83f30acc6b2030fb4161c415d28b0bb53a44927",
+      "weight": 500,
+      "static": true,
+      "latin_cyrillic_checked": true
+    },
+    {
+      "file": "src/main/res/font/inter_semibold.ttf",
+      "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZthjQ.ttf",
+      "sha256": "5b32acc527ddbaff852d09d2d804ca5b63cc761983c71374bd2ffb4252607c9d",
+      "weight": 600,
+      "static": true,
+      "latin_cyrillic_checked": true
+    },
+    {
+      "file": "src/main/res/font/manrope_semibold.ttf",
+      "url": "https://fonts.gstatic.com/s/manrope/v23/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk4jE9_G-bw.ttf",
+      "sha256": "232b27ea72486e6d1e77c3011174ea88a07e93aa6fb0ae6d8bd74454ea144e01",
+      "weight": 600,
+      "static": true,
+      "latin_cyrillic_checked": true
+    },
+    {
+      "file": "src/main/res/font/manrope_bold.ttf",
+      "url": "https://fonts.gstatic.com/s/manrope/v23/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk4aE9_G-bw.ttf",
+      "sha256": "b624121eb9032e170464176d9287e030caa3a8a78ee0c8cc0aaac236d69f7cae",
+      "weight": 700,
+      "static": true,
+      "latin_cyrillic_checked": true
+    },
+    {
+      "file": "src/main/assets/licenses/manrope_OFL.txt",
+      "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/OFL.txt",
+      "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b"
+    },
+    {
+      "file": "src/main/assets/licenses/inter_OFL.txt",
+      "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt",
+      "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57"
+    }
+  ]
+}

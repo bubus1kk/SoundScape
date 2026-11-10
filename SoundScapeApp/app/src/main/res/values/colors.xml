@@ -1,2 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources />
+<resources>
+    <!-- Atlas bootstrap background only, before the first Compose frame.
+         The complete color system lives in :core:designsystem. -->
+    <color name="soundscape_launch_background">#F5F7FC</color>
+</resources>
