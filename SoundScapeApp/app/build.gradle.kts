@@ -46,6 +46,7 @@ detekt {
 
 dependencies {
     implementation(project(":presentation"))
+    implementation(project(":core:designsystem"))
     implementation(project(":core:data"))
     implementation(project(":core:domain"))
     implementation(libs.androidx.lifecycle.runtime.compose)

@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 import com.soundscape.app.presentation.shell.ShellScreen
 import com.soundscape.app.presentation.shell.ShellViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -18,7 +19,9 @@ class MainActivity : ComponentActivity() {
         val shellViewModel = ViewModelProvider(this)[ShellViewModel::class.java]
         setContent {
             val state = shellViewModel.state.collectAsStateWithLifecycle()
-            ShellScreen(state.value)
+            SoundScapeTheme {
+                ShellScreen(state.value)
+            }
         }
     }
 }

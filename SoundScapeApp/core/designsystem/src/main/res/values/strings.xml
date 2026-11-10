@@ -1,0 +1,4 @@
+<resources>
+    <string name="soundscape_loading">Loading…</string>
+    <string name="soundscape_input_error">Invalid input</string>
+</resources>
