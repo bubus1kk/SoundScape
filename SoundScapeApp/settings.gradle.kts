@@ -25,5 +25,5 @@ dependencyResolutionManagement {
 rootProject.name = "SoundScapeApp"
 include(":core:domain")
 if (!providers.gradleProperty("domainOnly").map(String::toBoolean).getOrElse(false)) {
-    include(":app", ":core:data", ":presentation", ":core:designsystem")
+    include(":core:network", ":app", ":core:data", ":presentation", ":core:designsystem")
 }

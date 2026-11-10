@@ -16,6 +16,11 @@ android {
         applicationId = "com.soundscape.app"
         minSdk = 26
         targetSdk = 37
+        fun quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
+        val url = providers.gradleProperty("soundscape.supabaseUrl").orElse(providers.environmentVariable("SOUNDSCAPE_SUPABASE_URL")).getOrElse("")
+        val key = providers.gradleProperty("soundscape.supabasePublishableKey").orElse(providers.environmentVariable("SOUNDSCAPE_SUPABASE_PUBLISHABLE_KEY")).getOrElse("")
+        buildConfigField("String", "SUPABASE_URL", quoted(url))
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", quoted(key))
         versionCode = 1
         versionName = "1.0"
 
@@ -36,6 +41,7 @@ android {
     lint { abortOnError = true }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -45,6 +51,7 @@ detekt {
 }
 
 dependencies {
+    implementation(project(":core:network"))
     implementation(project(":presentation"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:data"))
@@ -62,6 +69,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -1,4 +1,5 @@
 plugins {
+    alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.jvm) apply false
@@ -13,6 +14,6 @@ tasks.register("detekt") {
     group = "verification"
     description = "Runs Kotlin static analysis in modules containing Kotlin sources."
     if (!providers.gradleProperty("domainOnly").map(String::toBoolean).getOrElse(false)) {
-        dependsOn(":app:detekt", ":presentation:detekt")
+        dependsOn(":app:detekt", ":presentation:detekt", ":core:network:detekt", ":core:data:detekt")
     }
 }

@@ -54,11 +54,33 @@ jobs:
       - name: Build debug APK
         run: sh ./gradlew :app:assembleDebug --no-daemon
       - name: Unit tests
-        run: sh ./gradlew :app:testDebugUnitTest :presentation:testDebugUnitTest --no-daemon
+        run: sh ./gradlew :app:testDebugUnitTest :presentation:testDebugUnitTest :core:network:testDebugUnitTest :core:data:testDebugUnitTest --no-daemon
       - name: Detekt
         run: sh ./gradlew detekt --no-daemon
       - name: Android Lint
-        run: sh ./gradlew :app:lintDebug :core:data:lintDebug :presentation:lintDebug --no-daemon
+        run: sh ./gradlew :app:lintDebug :core:data:lintDebug :core:network:lintDebug :presentation:lintDebug --no-daemon
+      - name: Release build and debug-only isolation
+        run: |
+          sh ./gradlew :app:assembleRelease --no-daemon
+          python3 - <<'PYCODE'
+          import glob
+          import zipfile
+          marker = b'NetworkDiagnosticsActivity'
+          for variant in ('debug', 'release'):
+              files = glob.glob(f'app/build/outputs/apk/{variant}/*.apk')
+              assert files, f'Missing {variant} APK'
+              for path in files:
+                  with zipfile.ZipFile(path) as apk:
+                      present = any(marker in apk.read(n) for n in apk.namelist() if n.endswith('.dex'))
+                      assert present == (variant == 'debug'), path
+          PYCODE
+      - name: Direct HTTP dependency audit
+        run: |
+          sh ./gradlew :app:dependencies --configuration debugRuntimeClasspath --no-daemon > debug-dependencies.txt
+          sh ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon > release-dependencies.txt
+          if grep -Ei 'supabase|io\.ktor|org\.postgresql|FAILED' debug-dependencies.txt release-dependencies.txt; then
+            exit 1
+          fi
       - name: Diagnostic reports
         if: always()
         uses: actions/upload-artifact@v4.6.2
