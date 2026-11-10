@@ -1,5 +1,9 @@
-plugins { alias(libs.plugins.android.library) }
-
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.detekt)
+}
 android {
     namespace = "com.soundscape.app.core.data"
     compileSdk = 37
@@ -10,5 +14,21 @@ android {
     }
     lint { abortOnError = true }
 }
-
-dependencies { implementation(project(":core:domain")) }
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+}
+dependencies {
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.retrofit)
+    implementation(libs.okhttp)
+    implementation(libs.serialization.json)
+    testImplementation(libs.junit)
+    testImplementation(libs.retrofit.serialization)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockwebserver)
+    implementation(project(":core:domain"))
+    implementation(project(":core:network"))
+}

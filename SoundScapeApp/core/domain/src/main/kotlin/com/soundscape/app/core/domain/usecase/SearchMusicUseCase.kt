@@ -3,7 +3,7 @@ package com.soundscape.app.core.domain.usecase
 import com.soundscape.app.core.domain.model.*
 import com.soundscape.app.core.domain.repository.*
 
-class SearchMusicUseCase(private val catalog: TrackCatalog) {
+class SearchMusicUseCase(private val catalog: TrackSearcher) {
     suspend operator fun invoke(input: MusicSearch): DomainResult<Page<Track>> {
         if (input.query.isBlank() || input.query.length > 200) return invalid("query", "length_1_to_200")
         val page = validatePage(input.page, 50)

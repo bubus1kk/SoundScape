@@ -8,7 +8,7 @@ import org.junit.Test
 
 class SearchMusicUseCaseTest {
     private val catalog = FakeCatalog()
-    private val useCase = SearchMusicUseCase(catalog)
+    private val useCase = SearchMusicUseCase(catalog as com.soundscape.app.core.domain.repository.TrackSearcher)
 
     @Test fun `query and filters are not rewritten`() = runTest {
         val input = MusicSearch("  music  ", true, listOf(2, 1), listOf(3), PageRequest(50, 7))

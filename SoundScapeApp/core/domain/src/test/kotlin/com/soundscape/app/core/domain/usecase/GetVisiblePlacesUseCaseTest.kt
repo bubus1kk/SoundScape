@@ -8,7 +8,7 @@ import org.junit.Test
 
 class GetVisiblePlacesUseCaseTest {
     private val places = FakePlaces()
-    private val useCase = GetVisiblePlacesUseCase(places)
+    private val useCase = GetVisiblePlacesUseCase(places as com.soundscape.app.core.domain.repository.VisiblePlacesReader)
 
     @Test fun `antimeridian and pagination are passed unchanged`() = runTest {
         val page = PageRequest(100, 4)
