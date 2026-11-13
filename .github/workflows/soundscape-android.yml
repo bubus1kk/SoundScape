@@ -53,12 +53,14 @@ jobs:
         run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
       - name: Build debug APK
         run: sh ./gradlew :app:assembleDebug --no-daemon
+      - name: Verify exported Room schema
+        run: git diff --exit-code -- core/database/schemas
       - name: Unit tests
-        run: sh ./gradlew :app:testDebugUnitTest :presentation:testDebugUnitTest :core:network:testDebugUnitTest :core:data:testDebugUnitTest --no-daemon
+        run: sh ./gradlew :core:database:testDebugUnitTest :app:testDebugUnitTest :presentation:testDebugUnitTest :core:network:testDebugUnitTest :core:data:testDebugUnitTest --no-daemon
       - name: Detekt
         run: sh ./gradlew detekt --no-daemon
       - name: Android Lint
-        run: sh ./gradlew :app:lintDebug :core:data:lintDebug :core:network:lintDebug :presentation:lintDebug --no-daemon
+        run: sh ./gradlew :core:database:lintDebug :app:lintDebug :core:data:lintDebug :core:network:lintDebug :presentation:lintDebug --no-daemon
       - name: Release build and debug-only isolation
         run: |
           sh ./gradlew :app:assembleRelease --no-daemon
@@ -95,3 +97,35 @@ jobs:
         with:
           name: soundscape-debug
           path: SoundScapeApp/app/build/outputs/apk/debug/*.apk
+
+  room-instrumented:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4.7.1
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4.4.2
+      - uses: android-actions/setup-android@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install compile SDK
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: cd SoundScapeApp && sh ./gradlew :core:database:connectedDebugAndroidTest --no-daemon
+      - uses: actions/upload-artifact@v4.6.2
+        if: always()
+        with:
+          name: room-instrumented-reports
+          path: SoundScapeApp/core/database/build/reports/androidTests/

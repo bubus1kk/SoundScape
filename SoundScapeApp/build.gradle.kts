@@ -14,6 +14,6 @@ tasks.register("detekt") {
     group = "verification"
     description = "Runs Kotlin static analysis in modules containing Kotlin sources."
     if (!providers.gradleProperty("domainOnly").map(String::toBoolean).getOrElse(false)) {
-        dependsOn(":app:detekt", ":presentation:detekt", ":core:network:detekt", ":core:data:detekt")
+        dependsOn(":core:database:detekt", ":app:detekt", ":presentation:detekt", ":core:network:detekt", ":core:data:detekt")
     }
 }
