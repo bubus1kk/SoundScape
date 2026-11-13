@@ -51,6 +51,7 @@ detekt {
 }
 
 dependencies {
+    implementation(libs.androidx.core.splashscreen)
     implementation(project(":core:network"))
     implementation(project(":presentation"))
     implementation(project(":core:designsystem"))
@@ -70,6 +71,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.datastore.preferences)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

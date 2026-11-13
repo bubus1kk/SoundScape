@@ -123,9 +123,11 @@ jobs:
           api-level: 35
           arch: x86_64
           disable-animations: true
-          script: cd SoundScapeApp && sh ./gradlew :core:database:connectedDebugAndroidTest --no-daemon
+          script: cd SoundScapeApp && sh ./gradlew :core:database:connectedDebugAndroidTest :app:connectedDebugAndroidTest --no-daemon
       - uses: actions/upload-artifact@v4.6.2
         if: always()
         with:
           name: room-instrumented-reports
-          path: SoundScapeApp/core/database/build/reports/androidTests/
+          path: |
+            SoundScapeApp/core/database/build/reports/androidTests/
+            SoundScapeApp/app/build/reports/androidTests/

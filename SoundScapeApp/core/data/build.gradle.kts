@@ -19,6 +19,7 @@ detekt {
     config.setFrom(rootProject.file("config/detekt/detekt.yml"))
 }
 dependencies {
+    implementation(libs.datastore.preferences)
     implementation(project(":core:database"))
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

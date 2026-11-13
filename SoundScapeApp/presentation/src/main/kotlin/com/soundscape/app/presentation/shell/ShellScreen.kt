@@ -1,5 +1,6 @@
 package com.soundscape.app.presentation.shell
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -10,12 +11,11 @@ import androidx.compose.ui.Modifier
 
 /** Inherits the application theme; Scaffold retains ownership of system insets. */
 @Composable
-fun ShellScreen(state: ShellUiState, modifier: Modifier = Modifier) {
+fun ShellScreen(state: ShellUiState, modifier: Modifier = Modifier, content: @Composable () -> Unit = {}) {
     Scaffold(modifier = modifier.fillMaxSize()) { padding ->
-        Text(
-            text = state.applicationName,
-            modifier = Modifier.padding(padding),
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        Column(Modifier.padding(padding)) {
+            Text(text = state.applicationName, style = MaterialTheme.typography.bodyLarge)
+            content()
+        }
     }
 }

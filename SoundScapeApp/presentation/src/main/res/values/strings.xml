@@ -1,0 +1,14 @@
+<resources>
+    <string name="appearance_title">Оформление</string>
+    <string name="theme_mode">Тема</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_dark">Тёмная</string>
+    <string name="theme_system">Системная</string>
+    <string name="theme_palette">Палитра</string>
+    <string name="theme_dynamic">Динамические цвета</string>
+    <string name="dynamic_unavailable">Динамические цвета доступны с Android 12. Выбор сохранён для совместимых устройств.</string>
+    <string name="dynamic_palette_hint">При динамических цветах используются цвета Android. Выбранная палитра сохранена.</string>
+    <string name="settings_read_error">Не удалось прочитать настройки.</string>
+    <string name="settings_write_error">Не удалось сохранить изменение. Повторите выбор.</string>
+    <string name="settings_retry">Повторить</string>
+</resources>
