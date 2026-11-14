@@ -26,7 +26,6 @@ import org.junit.runners.model.Statement
 import org.junit.Rule
 import org.junit.Test
 
-/** Uses the real Hilt graph and Preferences DataStore in the application. */
 class AppearanceSettingsTest {
     private val compose = createAndroidComposeRule<MainActivity>()
     @get:Rule val rules: TestRule = RuleChain.outerRule(isolateSettings()).around(compose)
@@ -35,7 +34,6 @@ class AppearanceSettingsTest {
         object : Statement() {
             override fun evaluate() {
                 val context = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
-                // Reuse the production delegate: this never creates a second DataStore for the file.
                 val store = SettingsModule.store(context)
                 val repository = DataStoreSettingsRepository(store)
                 val original = runBlocking(Dispatchers.IO) { store.data.first() }

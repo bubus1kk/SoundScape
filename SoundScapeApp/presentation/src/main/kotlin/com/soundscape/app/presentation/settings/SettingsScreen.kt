@@ -23,7 +23,6 @@ import com.soundscape.app.core.domain.model.ThemeMode
 import com.soundscape.app.core.domain.model.ThemePreset
 import com.soundscape.app.presentation.R
 
-/** Appearance controls use the surrounding existing application theme. */
 @Composable
 fun SettingsScreen(state: SettingsUiState, model: SettingsViewModel, modifier: Modifier = Modifier) {
     Column(modifier.verticalScroll(rememberScrollState()).padding(SoundScapeSpacing.space16)) {

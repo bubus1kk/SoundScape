@@ -29,7 +29,6 @@ import com.soundscape.app.presentation.R
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/** Main-source-set cache demonstration; production results always come from domain repositories. */
 @Composable
 fun LibraryScreen(model: LibraryViewModel, settings: @Composable () -> Unit) {
     val tab by model.tab.collectAsState()
@@ -106,7 +105,6 @@ private fun SearchContent(model: LibraryViewModel) {
     }
 }
 
-/** Empty persisted pages differ from missing pages, and content remains visible during failed refresh. */
 @Composable
 private fun <T> CacheStatus(state: CachedPageState<T>, refresh: () -> Unit) {
     if (state.refreshing) CircularProgressIndicator()

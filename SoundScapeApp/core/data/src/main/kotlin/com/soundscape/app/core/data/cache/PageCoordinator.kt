@@ -33,7 +33,6 @@ private class QueryEntry {
     fun version(page: PageRequest) = synchronized(this) { completed[page] ?: 0 }
 }
 
-/** Serializes each query, coalesces overlapping identical pages, and owns only observed/in-flight state. */
 class PageCoordinator<T>(
     private val storage: PageStorage<T>,
     private val offline: () -> Boolean,
@@ -49,7 +48,6 @@ class PageCoordinator<T>(
         Unit
     }
 
-    /** Reads cache first, with no hidden background work. Storage failures cannot become success. */
     suspend fun get(address: PageAddress, remote: suspend () -> DomainResult<Page<T>>): DomainResult<Page<T>> =
         guarded {
             if (!guestAllowed()) return@guarded DomainResult.Failure(DomainError.Forbidden)
@@ -62,7 +60,6 @@ class PageCoordinator<T>(
             }
         }
 
-    /** Refresh is explicit and belongs to the caller's coroutine; cancellation never becomes an error. */
     suspend fun refresh(address: PageAddress, remote: suspend () -> DomainResult<Page<T>>): DomainResult<Unit> {
         val entry = acquire(address)
         val version = entry.version(address.page)
@@ -108,7 +105,6 @@ class PageCoordinator<T>(
         }
     }
 
-    /** Combines durable snapshots with transient refresh status, retaining the last valid snapshot on read error. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun observe(address: PageAddress): Flow<CachedPageState<T>> = flow {
         if (!guestAllowed()) {

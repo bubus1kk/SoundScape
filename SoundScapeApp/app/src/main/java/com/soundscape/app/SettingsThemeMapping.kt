@@ -7,7 +7,6 @@ import com.soundscape.app.core.domain.model.ThemeMode
 import com.soundscape.app.core.domain.model.ThemePreset
 import com.soundscape.app.core.domain.model.UserSettings
 
-/** Maps independent preferences to the existing design system at the application boundary. */
 fun UserSettings.toThemeOptions(): ThemeOptions = ThemeOptions(
     mode = when (mode) {
         ThemeMode.LIGHT -> SoundScapeMode.Light

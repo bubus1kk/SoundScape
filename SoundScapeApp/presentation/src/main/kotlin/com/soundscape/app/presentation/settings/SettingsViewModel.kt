@@ -15,18 +15,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Null settings means no persisted value has been loaded yet. */
 data class SettingsUiState(
     val settings: UserSettings? = null,
     val saving: Boolean = false,
     val readFailed: Boolean = false,
     val writeFailed: Boolean = false,
 ) {
-    /** Initial disk read is pending; an explicit error must release the launch screen. */
     val initialLoading: Boolean get() = settings == null && !readFailed
 }
 
-/** Observes persisted values rather than applying optimistic, unconfirmed selections. */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(private val repository: SettingsRepository) : ViewModel() {
     private val mutableState = MutableStateFlow(SettingsUiState())
@@ -35,7 +32,6 @@ class SettingsViewModel @Inject constructor(private val repository: SettingsRepo
 
     init { retryRead() }
 
-    /** Retries a failed read without overwriting the underlying preferences file. */
     fun retryRead() {
         observer?.cancel()
         mutableState.update { it.copy(readFailed = false) }
@@ -50,11 +46,8 @@ class SettingsViewModel @Inject constructor(private val repository: SettingsRepo
         }
     }
 
-    /** Persists the selected brightness mode. */
     fun setMode(mode: ThemeMode) = save { repository.setMode(mode) }
-    /** Persists the selected palette without changing dynamic color preference. */
     fun setPreset(preset: ThemePreset) = save { repository.setPreset(preset) }
-    /** Persists whether Android dynamic colors should be used when supported. */
     fun setDynamicColor(enabled: Boolean) = save { repository.setDynamicColor(enabled) }
 
     private fun save(action: suspend () -> Unit) {

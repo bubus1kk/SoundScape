@@ -9,7 +9,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
-/** Inherits the application theme; Scaffold retains ownership of system insets. */
 @Composable
 fun ShellScreen(state: ShellUiState, modifier: Modifier = Modifier, content: @Composable () -> Unit = {}) {
     Scaffold(modifier = modifier.fillMaxSize()) { padding ->

@@ -22,10 +22,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Small demonstration destinations; opening settings never performs HTTP calls. */
 enum class LibraryTab { PLACES, SEARCH, SETTINGS }
 
-/** Explicit geographic query, not fixture results. East < west preserves antimeridian semantics. */
 data class MapArea(val south: Double, val west: Double, val north: Double, val east: Double) {
     fun bounds(): GeoBounds {
         val sw = (GeoPoint.create(south, west) as DomainResult.Success).value
@@ -34,13 +32,11 @@ data class MapArea(val south: Double, val west: Double, val north: Double, val e
     }
 }
 
-/** Query presets contain only bounds, never fixture results. */
 object LibraryAreas {
     val regional = MapArea(50.0, 30.0, 60.0, 40.0)
     val antimeridian = MapArea(-10.0, 170.0, 10.0, -170.0)
 }
 
-/** UI contains domain snapshots only; query switches cancel obsolete observation and refresh jobs. */
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val observePlaces: ObserveVisiblePlacesUseCase,
@@ -63,7 +59,6 @@ class LibraryViewModel @Inject constructor(
     private var watch: Job? = null
     private var refresh: Job? = null
 
-    /** Activates a destination, observing cache before making one explicit refresh attempt. */
     fun open(tab: LibraryTab) {
         stop()
         mutableTab.value = tab
@@ -88,20 +83,17 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** Preserves exact submitted text; changing a draft field alone does not relabel existing results. */
     fun submit(text: String, onlyInApp: Boolean) {
         mutableSearch.value = MusicSearch(text, onlyInApp)
         open(LibraryTab.SEARCH)
     }
 
-    /** Selects a real bounds query and returns to its first page. */
     fun selectArea(area: MapArea) {
         mutableArea.value = area
         mutablePage.value = PageRequest()
         open(LibraryTab.PLACES)
     }
 
-    /** Changes the page without changing the query identity or silently concatenating partial pages. */
     fun movePage(forward: Boolean) {
         if (tab.value == LibraryTab.PLACES) {
             val p = page.value
@@ -116,7 +108,6 @@ class LibraryViewModel @Inject constructor(
         open(tab.value)
     }
 
-    /** Also used for a distinct offline-to-online transition; overlaps are coalesced. */
     fun refreshActive() {
         if (refresh?.isActive == true) return
         refresh = viewModelScope.launch {

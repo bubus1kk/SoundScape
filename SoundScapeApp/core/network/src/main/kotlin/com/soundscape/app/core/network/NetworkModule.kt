@@ -30,7 +30,6 @@ class ApiCredentialsInterceptor(
         val request = chain.request()
         val origin = config.url.toHttpUrl()
         check(request.url.host == origin.host && request.url.port == origin.port && request.url.scheme == origin.scheme)
-        // Cache readers are explicitly anonymous, even if future auth changes during an in-flight request.
         val token = if (request.header("X-Soundscape-Guest") == "true") null else tokens.currentAccessToken()
         val builder = request.newBuilder().header("apikey", config.publishableKey).removeHeader("Authorization")
         builder.removeHeader("X-Soundscape-Guest")

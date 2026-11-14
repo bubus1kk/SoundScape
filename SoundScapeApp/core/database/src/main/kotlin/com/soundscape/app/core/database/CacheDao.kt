@@ -9,16 +9,12 @@ import androidx.room.Upsert
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 
-/** Atomic page storage. All writers use these transactional entry points. */
-// Room transaction entry points and their protected SQL primitives must share a DAO.
 @Suppress("TooManyFunctions")
 @Dao
 abstract class CacheDao {
-    /** Reads one page; null means absent, unlike an empty successful page. */
     @Query("SELECT * FROM cache_pages WHERE scope=:scope AND queryKey=:key AND `offset`=:offset AND `limit`=:limit")
     abstract suspend fun page(scope: String, key: String, offset: Int, limit: Int): CachedQueryPageEntity?
 
-    /** Reads ordered map metadata for precisely one page. */
     @Query("""
         SELECT p.* FROM cached_places p JOIN map_page_items i ON p.scope=i.scope AND p.kind=i.kind AND
         p.id=i.id WHERE i.scope=:scope AND i.queryKey=:key AND i.`offset`=:offset AND i.`limit`=:limit
@@ -26,7 +22,6 @@ abstract class CacheDao {
     """)
     abstract suspend fun places(scope: String, key: String, offset: Int, limit: Int): List<CachedMapPlaceEntity>
 
-    /** Reads ordered track metadata for precisely one page. */
     @Query("""
         SELECT t.* FROM cached_tracks t JOIN track_page_items i ON t.scope=i.scope AND t.id=i.id WHERE
         i.scope=:scope AND i.queryKey=:key AND i.`offset`=:offset AND i.`limit`=:limit ORDER BY
@@ -34,17 +29,14 @@ abstract class CacheDao {
     """)
     abstract suspend fun tracks(scope: String, key: String, offset: Int, limit: Int): List<CachedTrackEntity>
 
-    /** Null denotes absence; the header and ordered items share a transaction snapshot. */
     @Transaction
     open suspend fun mapSnapshot(scope: String, key: String, offset: Int, limit: Int): MapPageSnapshot? =
         page(scope, key, offset, limit)?.let { MapPageSnapshot(it, places(scope, key, offset, limit)) }
 
-    /** Null denotes absence, not an empty successful page. */
     @Transaction
     open suspend fun trackSnapshot(scope: String, key: String, offset: Int, limit: Int): TrackPageSnapshot? =
         page(scope, key, offset, limit)?.let { TrackPageSnapshot(it, tracks(scope, key, offset, limit)) }
 
-    /** Invalidations include headers, membership and shared metadata; counts are only change signals. */
     @Query("""
         SELECT COUNT(*) FROM cache_pages p LEFT JOIN map_page_items i ON p.scope=i.scope AND
         p.queryKey=i.queryKey AND p.`offset`=i.`offset` AND p.`limit`=i.`limit`
@@ -53,7 +45,6 @@ abstract class CacheDao {
     """)
     abstract fun mapChanges(scope: String, key: String, offset: Int, limit: Int): Flow<Long>
 
-    /** Tracks all tables that can affect the atomic track snapshot. */
     @Query("""
         SELECT COUNT(*) FROM cache_pages p LEFT JOIN track_page_items i ON p.scope=i.scope AND
         p.queryKey=i.queryKey AND p.`offset`=i.`offset` AND p.`limit`=i.`limit`
@@ -62,16 +53,13 @@ abstract class CacheDao {
     """)
     abstract fun trackChanges(scope: String, key: String, offset: Int, limit: Int): Flow<Long>
 
-    /** Later pages reuse the query generation; only a first-page refresh starts a new generation. */
     @Transaction
     open suspend fun refreshGeneration(scope: String, key: String, offset: Int): Long =
         if (offset == 0) beginRefresh(scope, key) else generation(scope, key) ?: beginRefresh(scope, key)
 
-    /** Returns the current persisted refresh generation. */
     @Query("SELECT generation FROM cache_queries WHERE scope=:scope AND queryKey=:key")
     abstract suspend fun generation(scope: String, key: String): Long?
 
-    /** Begins a new generation without deleting previously usable cached pages. */
     @Transaction
     open suspend fun beginRefresh(scope: String, key: String): Long {
         require(scope.isNotBlank() && key.isNotBlank())
@@ -83,7 +71,6 @@ abstract class CacheDao {
         return next
     }
 
-    /** Rejects stale results before any mutation; replaces a complete map page atomically. */
     @Transaction
     open suspend fun savePlaces(page: CachedQueryPageEntity, items: List<CachedMapPlaceEntity>): Boolean {
         validate(page, items.size)
@@ -110,7 +97,6 @@ abstract class CacheDao {
         return true
     }
 
-    /** Rejects stale results before any mutation; replaces a complete track page atomically. */
     @Transaction
     open suspend fun saveTracks(page: CachedQueryPageEntity, items: List<CachedTrackEntity>): Boolean {
         validate(page, items.size)
@@ -134,7 +120,6 @@ abstract class CacheDao {
         return true
     }
 
-    /** Deletes ordinary cache pages older than a caller-selected cutoff, then orphan metadata. */
     @Transaction
     open suspend fun deleteBefore(cutoff: Long) {
         deleteOldPages(cutoff)

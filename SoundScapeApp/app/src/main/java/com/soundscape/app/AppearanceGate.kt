@@ -17,7 +17,6 @@ import com.soundscape.app.core.designsystem.ui.theme.ThemeOptions
 import com.soundscape.app.presentation.R
 import com.soundscape.app.presentation.settings.SettingsUiState
 
-/** Main content is never composed with guessed settings; errors have an independent recovery surface. */
 @Composable
 internal fun AppearanceGate(
     state: SettingsUiState,
@@ -30,7 +29,6 @@ internal fun AppearanceGate(
     if (settings != null) {
         content(settings.toThemeOptions())
     } else {
-        // This neutral recovery/loading surface is not the application content.
         SoundScapeTheme {
             Surface(Modifier.fillMaxSize()) {
                 Column(Modifier.padding(SoundScapeSpacing.space16)) {

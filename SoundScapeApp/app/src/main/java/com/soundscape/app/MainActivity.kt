@@ -38,7 +38,6 @@ class MainActivity : ComponentActivity() {
             val state = shellViewModel.state.collectAsStateWithLifecycle()
             val currentSettings = settingsState.value
             AppearanceGate(currentSettings, settingsModel::retryRead,
-                // Latch open on success OR failure; retries cannot bring back the launch splash.
                 onReady = { firstContentReady = true }) { options ->
                 SoundScapeTheme(options = options) {
                     val lightBars = MaterialTheme.colorScheme.background.luminance() > LIGHT_BACKGROUND_THRESHOLD

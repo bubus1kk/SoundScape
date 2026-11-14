@@ -15,7 +15,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.flowOf
 
-/** Guest-only cache adapter. Future authenticated bindings must use a distinct, verified user scope. */
 @Singleton
 class OfflineFirstVisiblePlaces @Inject constructor(
     private val remote: RemoteVisiblePlacesReader, storage: RoomMapStorage,

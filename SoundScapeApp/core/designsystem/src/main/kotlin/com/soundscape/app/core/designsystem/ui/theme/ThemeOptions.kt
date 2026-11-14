@@ -4,7 +4,6 @@ package com.soundscape.app.core.designsystem.ui.theme
 enum class SoundScapePreset { Atlas, Aurora, Violet }
 enum class SoundScapeMode { Light, Dark, System }
 
-/** Immutable input. Dynamic colors never mutate or replace the selected preset. */
 data class ThemeOptions(
     val preset: SoundScapePreset = SoundScapePreset.Atlas,
     val mode: SoundScapeMode = SoundScapeMode.System,
@@ -17,7 +16,6 @@ data class ResolvedTheme(
     val dynamicColor: Boolean,
 )
 
-/** Pure resolution: Android API access and persistence stay outside this function. */
 fun resolveTheme(options: ThemeOptions, systemDark: Boolean, sdkInt: Int): ResolvedTheme =
     ResolvedTheme(
         preset = options.preset,

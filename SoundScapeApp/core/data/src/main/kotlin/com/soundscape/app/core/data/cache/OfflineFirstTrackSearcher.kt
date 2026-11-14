@@ -15,7 +15,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.flowOf
 
-/** Guest-only cache adapter. Future authenticated bindings must use a distinct, verified user scope. */
 @Singleton
 class OfflineFirstTrackSearcher @Inject constructor(
     private val remote: RemoteTrackSearcher, storage: RoomTrackStorage,

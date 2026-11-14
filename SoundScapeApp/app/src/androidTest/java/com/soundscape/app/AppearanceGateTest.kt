@@ -20,7 +20,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
-/** Controlled state transitions test the actual composition gate without disk timing or sleeps. */
 class AppearanceGateTest {
     @get:Rule val compose = createComposeRule()
     private val saved = UserSettings(ThemeMode.DARK, ThemePreset.VIOLET)

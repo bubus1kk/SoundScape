@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
-    <!-- Re-fetchable metadata only; revisit before adding user drafts. -->
     <cloud-backup>
         <exclude domain="database" path="soundscape-cache.db" />
         <exclude domain="database" path="soundscape-cache.db-wal" />

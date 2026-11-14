@@ -21,7 +21,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
-/** Real SQLite tests for atomic snapshots, observable empty pages and durable generation. */
 class AtomicPageTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val db = Room.inMemoryDatabaseBuilder(context, SoundScapeDatabase::class.java).build()

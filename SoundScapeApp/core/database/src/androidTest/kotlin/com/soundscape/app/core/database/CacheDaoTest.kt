@@ -101,7 +101,7 @@ class CacheDaoTest {
         try {
             sql.execSQL("INSERT INTO track_page_items VALUES ('guest', 'missing', 0, 20, 0, '$first')")
             fail("Foreign key must fail")
-        } catch (_: android.database.sqlite.SQLiteConstraintException) { /* Expected actual SQLite FK rejection. */ }
+        } catch (_: android.database.sqlite.SQLiteConstraintException) {   }
     }
 
     @Test fun cleanupRemovesPagesAndOrphanMetadata() = runTest {

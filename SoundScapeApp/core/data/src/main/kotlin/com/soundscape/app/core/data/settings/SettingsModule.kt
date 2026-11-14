@@ -14,15 +14,12 @@ import javax.inject.Singleton
 
 private val Context.appearanceStore by preferencesDataStore(name = "appearance")
 
-/** One application-scoped Preferences DataStore; no credentials are stored here. */
 @Module
 @InstallIn(SingletonComponent::class)
 object SettingsModule {
-    /** Returns the single store associated with the application context. */
     @Provides @Singleton
     fun store(@ApplicationContext context: Context): DataStore<Preferences> = context.appearanceStore
 
-    /** Exposes the storage adapter through the independent domain contract. */
     @Provides @Singleton
     fun repository(implementation: DataStoreSettingsRepository): SettingsRepository = implementation
 }

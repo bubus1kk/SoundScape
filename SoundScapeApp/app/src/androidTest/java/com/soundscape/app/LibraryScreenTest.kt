@@ -40,7 +40,6 @@ import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 
-/** UI fixtures exist only in androidTest. Real Retrofit/Room is tested in core:data. */
 class LibraryScreenTest {
     @get:Rule val compose = createComposeRule()
     private val store = ViewModelStore()

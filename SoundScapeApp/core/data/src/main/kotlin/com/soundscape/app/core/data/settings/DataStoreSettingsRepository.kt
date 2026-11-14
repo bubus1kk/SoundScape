@@ -12,7 +12,6 @@ import com.soundscape.app.core.domain.repository.SettingsRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.map
 
-/** Preferences adapter. IO/corruption errors are never disguised as successfully loaded defaults. */
 class DataStoreSettingsRepository @Inject constructor(private val store: DataStore<Preferences>) : SettingsRepository {
     override val settings = store.data.map { preferences ->
         UserSettings(

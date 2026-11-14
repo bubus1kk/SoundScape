@@ -43,7 +43,6 @@ import org.junit.Test
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
-/** File-backed Room + actual Retrofit DTOs against localhost only, never a hosted backend. */
 class OfflineRoomIntegrationTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val name = "offline-${UUID.randomUUID()}.db"

@@ -158,7 +158,7 @@ class RemoteVisiblePlacesReader @Inject constructor(
 class RemoteTrackSearcher @Inject constructor(
     private val api: Lazy<TracksApi>, private val call: RemoteCall,
 ) : TrackSearcher {
-    @Suppress("ReturnCount") // Reject invalid inputs before sending any HTTP request.
+    @Suppress("ReturnCount")
     override suspend fun search(parameters: MusicSearch): DomainResult<Page<Track>> {
         if (parameters.page.offset !in 0..1000 || parameters.page.limit !in 1..50)
             return DomainResult.Failure(DomainError.Validation("page", "outside_range"))

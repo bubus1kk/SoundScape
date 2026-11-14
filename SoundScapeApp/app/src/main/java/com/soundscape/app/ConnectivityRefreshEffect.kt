@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 
-/** Foreground-only reconnect signal. The data layer still verifies ConnectivityChecker before HTTP. */
 @Composable
 internal fun ConnectivityRefreshEffect(model: LibraryViewModel) {
     val context = LocalContext.current.applicationContext

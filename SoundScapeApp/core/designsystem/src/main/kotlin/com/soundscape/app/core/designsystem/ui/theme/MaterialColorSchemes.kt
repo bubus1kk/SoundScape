@@ -5,7 +5,6 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 
-/** Every Material role is explicit; aliases preserve the original Figma colors. */
 @Suppress("DEPRECATION")
 fun materialColorScheme(preset: SoundScapePreset, dark: Boolean): ColorScheme {
     val p = SoundScapePalettes.colors(preset, dark)

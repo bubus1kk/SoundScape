@@ -27,7 +27,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Fake transaction boundary tests coordinator policy; separate Android tests exercise real Room. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class PageCoordinatorTest {
     private class Store : PageStorage<Int> {

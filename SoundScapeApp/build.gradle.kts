@@ -9,7 +9,6 @@ plugins {
     alias(libs.plugins.detekt) apply false
 }
 
-// Plugin versions are resolved through the shared version catalog in each module.
 tasks.register("detekt") {
     group = "verification"
     description = "Runs Kotlin static analysis in modules containing Kotlin sources."

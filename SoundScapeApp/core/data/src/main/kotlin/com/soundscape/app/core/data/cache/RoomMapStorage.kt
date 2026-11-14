@@ -10,7 +10,6 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
-/** Atomic Room snapshots and observable invalidation; no service writes occur while observing. */
 class RoomMapStorage @Inject constructor(private val dao: CacheDao) : PageStorage<MapPlace> {
     override suspend fun read(address: PageAddress): CachedPage<MapPlace>? =
         dao.mapSnapshot(address.scope, address.key, address.page.offset, address.page.limit)?.let {

@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import com.soundscape.app.core.designsystem.R
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 
-/** Hoisted input. Error takes precedence over focus; disabled takes precedence over both. */
 @Composable
 fun SoundScapeTextField(
     value: String,
