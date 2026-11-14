@@ -45,6 +45,18 @@ class CredentialsHttpsTest {
             }
         }
     }
+    @Test fun `guest cache request never reads or sends tokens and strips internal marker`() {
+        server().use { server ->
+            server.enqueue(MockResponse().setBody("{}"))
+            val client = client(server, AccessTokenProvider { error("guest must not read a token") })
+            client.newCall(Request.Builder().url(url(server))
+                .header("X-Soundscape-Guest", "true").header("Authorization", "stale").build()).execute().close()
+            val request = server.takeRequest()
+            assertNull(request.getHeader("Authorization"))
+            assertNull(request.getHeader("X-Soundscape-Guest"))
+            assertEquals("sb_publishable_test", request.getHeader("apikey"))
+        }
+    }
     @Test fun `different origin is rejected before transport and token lookup`() {
         server().use { configured ->
             server().use { other ->

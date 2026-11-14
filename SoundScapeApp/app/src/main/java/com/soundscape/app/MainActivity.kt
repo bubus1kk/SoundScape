@@ -16,6 +16,8 @@ import com.soundscape.app.presentation.shell.ShellViewModel
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.soundscape.app.presentation.settings.SettingsScreen
 import com.soundscape.app.presentation.settings.SettingsViewModel
+import com.soundscape.app.presentation.library.LibraryScreen
+import com.soundscape.app.presentation.library.LibraryViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 private const val LIGHT_BACKGROUND_THRESHOLD = 0.5f
@@ -27,6 +29,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val shellViewModel = ViewModelProvider(this)[ShellViewModel::class.java]
+        val libraryModel = ViewModelProvider(this)[LibraryViewModel::class.java]
         val settingsModel = ViewModelProvider(this)[SettingsViewModel::class.java]
         var firstContentReady = false
         splash.setKeepOnScreenCondition { !firstContentReady }
@@ -45,8 +48,9 @@ class MainActivity : ComponentActivity() {
                             isAppearanceLightNavigationBars = lightBars
                         }
                     }
+                    ConnectivityRefreshEffect(libraryModel)
                     ShellScreen(state.value) {
-                        SettingsScreen(settingsState.value, settingsModel)
+                        LibraryScreen(libraryModel) { SettingsScreen(settingsState.value, settingsModel) }
                     }
                 }
             }

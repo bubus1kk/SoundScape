@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
+import retrofit2.http.Headers
 
 @Serializable
 data class VisiblePlacesRequestDto(
@@ -30,10 +31,12 @@ data class TrackViewDto(
 @Serializable
 data class CatalogPageDto(val items: List<TrackViewDto>, val limit: Int, val offset: Int, val hasMore: Boolean)
 interface PlacesApi {
+    @Headers("X-Soundscape-Guest: true")
     @POST("rest/v1/rpc/get_visible_places")
     suspend fun visible(@Body request: VisiblePlacesRequestDto): Response<PlacePageDto>
 }
 interface TracksApi {
+    @Headers("X-Soundscape-Guest: true")
     @POST("functions/v1/v1-search-tracks")
     suspend fun search(@Body request: SearchTracksRequestDto): Response<CatalogPageDto>
 }

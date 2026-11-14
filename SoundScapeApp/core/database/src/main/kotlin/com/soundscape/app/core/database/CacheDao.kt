@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
 import java.util.UUID
+import kotlinx.coroutines.flow.Flow
 
 /** Atomic page storage. All writers use these transactional entry points. */
 // Room transaction entry points and their protected SQL primitives must share a DAO.
@@ -33,6 +34,39 @@ abstract class CacheDao {
     """)
     abstract suspend fun tracks(scope: String, key: String, offset: Int, limit: Int): List<CachedTrackEntity>
 
+    /** Null denotes absence; the header and ordered items share a transaction snapshot. */
+    @Transaction
+    open suspend fun mapSnapshot(scope: String, key: String, offset: Int, limit: Int): MapPageSnapshot? =
+        page(scope, key, offset, limit)?.let { MapPageSnapshot(it, places(scope, key, offset, limit)) }
+
+    /** Null denotes absence, not an empty successful page. */
+    @Transaction
+    open suspend fun trackSnapshot(scope: String, key: String, offset: Int, limit: Int): TrackPageSnapshot? =
+        page(scope, key, offset, limit)?.let { TrackPageSnapshot(it, tracks(scope, key, offset, limit)) }
+
+    /** Invalidations include headers, membership and shared metadata; counts are only change signals. */
+    @Query("""
+        SELECT COUNT(*) FROM cache_pages p LEFT JOIN map_page_items i ON p.scope=i.scope AND
+        p.queryKey=i.queryKey AND p.`offset`=i.`offset` AND p.`limit`=i.`limit`
+        LEFT JOIN cached_places m ON i.scope=m.scope AND i.kind=m.kind AND i.id=m.id
+        WHERE p.scope=:scope AND p.queryKey=:key AND p.`offset`=:offset AND p.`limit`=:limit
+    """)
+    abstract fun mapChanges(scope: String, key: String, offset: Int, limit: Int): Flow<Long>
+
+    /** Tracks all tables that can affect the atomic track snapshot. */
+    @Query("""
+        SELECT COUNT(*) FROM cache_pages p LEFT JOIN track_page_items i ON p.scope=i.scope AND
+        p.queryKey=i.queryKey AND p.`offset`=i.`offset` AND p.`limit`=i.`limit`
+        LEFT JOIN cached_tracks t ON i.scope=t.scope AND i.id=t.id
+        WHERE p.scope=:scope AND p.queryKey=:key AND p.`offset`=:offset AND p.`limit`=:limit
+    """)
+    abstract fun trackChanges(scope: String, key: String, offset: Int, limit: Int): Flow<Long>
+
+    /** Later pages reuse the query generation; only a first-page refresh starts a new generation. */
+    @Transaction
+    open suspend fun refreshGeneration(scope: String, key: String, offset: Int): Long =
+        if (offset == 0) beginRefresh(scope, key) else generation(scope, key) ?: beginRefresh(scope, key)
+
     /** Returns the current persisted refresh generation. */
     @Query("SELECT generation FROM cache_queries WHERE scope=:scope AND queryKey=:key")
     abstract suspend fun generation(scope: String, key: String): Long?
@@ -41,6 +75,9 @@ abstract class CacheDao {
     @Transaction
     open suspend fun beginRefresh(scope: String, key: String): Long {
         require(scope.isNotBlank() && key.isNotBlank())
+        if (generation(scope, key) == null && queryCount() >= CacheCapacity.QUERIES) {
+            throw CacheCapacityExceededException()
+        }
         val next = Math.addExact(generation(scope, key) ?: 0, 1)
         putQuery(CacheQueryEntity(scope, key, next))
         return next
@@ -59,6 +96,12 @@ abstract class CacheDao {
             require(it.latitude in -CacheKeys.MAX_LATITUDE..CacheKeys.MAX_LATITUDE)
             require(it.longitude in -CacheKeys.MAX_LONGITUDE..CacheKeys.MAX_LONGITUDE)
         }
+        checkPageBudget(page)
+        val extra = items.groupBy { it.kind }.entries.sumOf { (kind, group) ->
+            val ids = group.map { it.id }.distinct()
+            ids.size - existingPlaces(page.scope, kind, ids)
+        }
+        if (placeCount() + extra > CacheCapacity.METADATA_ROWS) throw CacheCapacityExceededException()
         prepare(page)
         putPlaces(items)
         putMapItems(items.mapIndexed { index, item ->
@@ -78,6 +121,11 @@ abstract class CacheDao {
             require(it.availability in setOf("IN_APP", "EXTERNAL_ONLY"))
             uuid(it.id)
         }
+        checkPageBudget(page)
+        val ids = items.map { it.id }.distinct()
+        if (trackCount() + ids.size - existingTracks(page.scope, ids) > CacheCapacity.METADATA_ROWS) {
+            throw CacheCapacityExceededException()
+        }
         prepare(page)
         putTracks(items)
         putTrackItems(items.mapIndexed { index, item ->
@@ -93,6 +141,25 @@ abstract class CacheDao {
         deleteOrphanPlaces()
         deleteOrphanTracks()
     }
+
+    private suspend fun checkPageBudget(page: CachedQueryPageEntity) {
+        if (page(page.scope, page.queryKey, page.offset, page.limit) == null && pageCount() >= CacheCapacity.PAGES) {
+            throw CacheCapacityExceededException()
+        }
+    }
+
+    @Query("SELECT COUNT(*) FROM cache_queries")
+    protected abstract suspend fun queryCount(): Int
+    @Query("SELECT COUNT(*) FROM cache_pages")
+    protected abstract suspend fun pageCount(): Int
+    @Query("SELECT COUNT(*) FROM cached_places")
+    protected abstract suspend fun placeCount(): Int
+    @Query("SELECT COUNT(*) FROM cached_tracks")
+    protected abstract suspend fun trackCount(): Int
+    @Query("SELECT COUNT(*) FROM cached_places WHERE scope=:scope AND kind=:kind AND id IN (:ids)")
+    protected abstract suspend fun existingPlaces(scope: String, kind: String, ids: List<String>): Int
+    @Query("SELECT COUNT(*) FROM cached_tracks WHERE scope=:scope AND id IN (:ids)")
+    protected abstract suspend fun existingTracks(scope: String, ids: List<String>): Int
 
     private suspend fun prepare(page: CachedQueryPageEntity) {
         if (page.offset == 0) deleteOtherGenerations(page.scope, page.queryKey, page.generation)

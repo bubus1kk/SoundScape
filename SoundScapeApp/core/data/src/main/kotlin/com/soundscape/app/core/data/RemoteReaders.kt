@@ -150,6 +150,7 @@ class RemoteVisiblePlacesReader @Inject constructor(
         return call.execute({ api.get().visible(VisiblePlacesRequestDto(
             bounds.southWest.latitude, bounds.southWest.longitude,
             bounds.northEast.latitude, bounds.northEast.longitude, page.limit, page.offset)) }) {
+            require(it.limit == page.limit && it.offset == page.offset)
             Page(it.items.map { item -> item.toDomain() }, it.hasMore)
         }
     }
@@ -170,6 +171,7 @@ class RemoteTrackSearcher @Inject constructor(
         return call.execute({ api.get().search(SearchTracksRequestDto(parameters.query,
             parameters.onlyInApp, parameters.page.limit, parameters.page.offset,
             parameters.genreIds, parameters.moodIds)) }) {
+            require(it.limit == parameters.page.limit && it.offset == parameters.page.offset)
             Page(it.items.map { item -> item.toDomain() }, it.hasMore)
         }
     }
