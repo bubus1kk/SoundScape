@@ -1,17 +1,14 @@
 package com.soundscape.app
 
-import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.core.view.WindowCompat
-import org.junit.Assert.assertEquals
+import com.soundscape.app.core.designsystem.ui.theme.SoundScapePalettes
 import com.soundscape.app.core.domain.model.ThemeMode
 import com.soundscape.app.core.domain.model.ThemePreset
 import com.soundscape.app.core.data.settings.DataStoreSettingsRepository
@@ -20,6 +17,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.rules.RuleChain
 import org.junit.rules.TestRule
 import org.junit.runners.model.Statement
@@ -41,6 +40,7 @@ class AppearanceSettingsTest {
                     runBlocking(Dispatchers.IO) {
                         repository.setMode(ThemeMode.DARK)
                         repository.setPreset(ThemePreset.VIOLET)
+                        repository.setDynamicColor(false)
                     }
                     base.evaluate()
                 } finally {
@@ -53,35 +53,25 @@ class AppearanceSettingsTest {
         }
     }
 
-    @Test fun selectionsSurviveActivityRecreation() {
-        compose.waitUntil(15000) { compose.onAllNodesWithText("Тёмная").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Тёмная").assertIsSelected()
-        compose.onNodeWithText("Violet").assertIsSelected()
-        for (label in listOf("Светлая", "Тёмная", "Системная", "Тёмная", "Atlas", "Aurora", "Violet")) {
-            compose.waitUntil(15000) { runCatching { compose.onNodeWithText(label).assertIsEnabled() }.isSuccess }
-            compose.onNodeWithText(label).performScrollTo().performClick()
-            compose.waitUntil(15000) { runCatching { compose.onNodeWithText(label).assertIsSelected() }.isSuccess }
-            if (label == "Светлая" || label == "Тёмная") {
-                compose.runOnIdle {
-                    val activity = compose.activity
-                    val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-                    assertEquals(label == "Светлая", controller.isAppearanceLightStatusBars)
-                    assertEquals(label == "Светлая", controller.isAppearanceLightNavigationBars)
-                }
-            }
-        }
-        val toggle = compose.onNodeWithContentDescription("Динамические цвета")
-        toggle.performScrollTo()
-        compose.waitUntil(15000) { runCatching { toggle.assertIsEnabled() }.isSuccess }
-        if (runCatching { toggle.assertIsOn() }.isFailure) toggle.performClick()
-        compose.waitUntil(15000) { runCatching { toggle.assertIsOn() }.isSuccess }
+    @Test fun savedThemeAppliesToMinimalShellAfterActivityRecreation() {
+        assertSavedTheme()
         compose.activityRule.scenario.recreate()
-        compose.waitUntil(15000) { runCatching { compose.onNodeWithText("Тёмная").assertIsSelected() }.isSuccess }
-        compose.onNodeWithText("Violet").assertIsSelected()
-        compose.onNodeWithContentDescription("Динамические цвета").assertIsOn()
-        compose.onNodeWithContentDescription("Динамические цвета").performScrollTo().performClick()
-        compose.waitUntil(15000) { runCatching {
-            compose.onNodeWithContentDescription("Динамические цвета").assertIsOff()
-        }.isSuccess }
+        assertSavedTheme()
+    }
+
+    private fun assertSavedTheme() {
+        compose.waitUntil(15000) {
+            runCatching { compose.onAllNodesWithText("SoundScape").fetchSemanticsNodes().isNotEmpty() }
+                .getOrDefault(false)
+        }
+        compose.onNodeWithText("SoundScape").assertExists()
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        assertEquals(SoundScapePalettes.VioletDark.background.toArgb(),
+            pixels[pixels.width / 2, pixels.height / 2].toArgb())
+        compose.runOnIdle {
+            val controller = WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView)
+            assertFalse(controller.isAppearanceLightStatusBars)
+            assertFalse(controller.isAppearanceLightNavigationBars)
+        }
     }
 }

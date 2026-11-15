@@ -7,7 +7,6 @@ import com.soundscape.app.core.domain.repository.SettingsRepository
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
@@ -21,7 +20,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
-import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 
@@ -34,14 +32,12 @@ class SettingsViewModelTest {
         val values = MutableStateFlow(UserSettings())
         var readGate: CompletableDeferred<Unit>? = null
         var failRead = false
-        var failWrite = false
         override val settings get() = flow {
             readGate?.await()
             if (failRead) throw IOException()
             emitAll(values)
         }
         override suspend fun setMode(mode: ThemeMode) {
-            if (failWrite) throw IOException()
             values.value = values.value.copy(mode = mode)
         }
         override suspend fun setPreset(preset: ThemePreset) { values.value = values.value.copy(preset = preset) }
@@ -67,22 +63,10 @@ class SettingsViewModelTest {
         val model = SettingsViewModel(repository)
         assertNull(model.state.value.settings)
         runCurrent()
-        model.setMode(ThemeMode.DARK); runCurrent()
-        model.setPreset(ThemePreset.VIOLET); runCurrent()
-        model.setDynamicColor(true); runCurrent()
+        repository.setMode(ThemeMode.DARK); runCurrent()
+        repository.setPreset(ThemePreset.VIOLET); runCurrent()
+        repository.setDynamicColor(true); runCurrent()
         assertEquals(UserSettings(ThemeMode.DARK, ThemePreset.VIOLET, true), model.state.value.settings)
-    }
-    @Test fun writeFailureDoesNotApplyUnpersistedChoice() = runTest(dispatcher) {
-        val repository = Fake()
-        val model = SettingsViewModel(repository)
-        runCurrent(); repository.failWrite = true
-        model.setMode(ThemeMode.DARK); runCurrent()
-        assertTrue(model.state.value.writeFailed)
-        assertFalse(model.state.value.saving)
-        assertEquals(ThemeMode.SYSTEM, model.state.value.settings!!.mode)
-        repository.failWrite = false
-        model.setMode(ThemeMode.DARK); runCurrent()
-        assertFalse(model.state.value.writeFailed)
     }
     @Test fun readFailureCanBeRetried() = runTest(dispatcher) {
         val repository = Fake().apply { failRead = true }

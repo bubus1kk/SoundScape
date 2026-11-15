@@ -2,8 +2,6 @@ package com.soundscape.app.presentation.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.soundscape.app.core.domain.model.ThemeMode
-import com.soundscape.app.core.domain.model.ThemePreset
 import com.soundscape.app.core.domain.model.UserSettings
 import com.soundscape.app.core.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,9 +15,7 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val settings: UserSettings? = null,
-    val saving: Boolean = false,
     val readFailed: Boolean = false,
-    val writeFailed: Boolean = false,
 ) {
     val initialLoading: Boolean get() = settings == null && !readFailed
 }
@@ -46,21 +42,4 @@ class SettingsViewModel @Inject constructor(private val repository: SettingsRepo
         }
     }
 
-    fun setMode(mode: ThemeMode) = save { repository.setMode(mode) }
-    fun setPreset(preset: ThemePreset) = save { repository.setPreset(preset) }
-    fun setDynamicColor(enabled: Boolean) = save { repository.setDynamicColor(enabled) }
-
-    private fun save(action: suspend () -> Unit) {
-        if (state.value.settings == null || state.value.saving || state.value.readFailed) return
-        mutableState.update { it.copy(saving = true, writeFailed = false) }
-        viewModelScope.launch {
-            try {
-                action()
-            } catch (_: IOException) {
-                mutableState.update { it.copy(writeFailed = true) }
-            } finally {
-                mutableState.update { it.copy(saving = false) }
-            }
-        }
-    }
 }
