@@ -23,7 +23,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 
-/** Material selectable semantics/ripple; visual minimum 36 dp, touch minimum 48 dp. */
 @Composable
 fun SoundScapeFilterChip(
     text: String,
@@ -61,7 +60,6 @@ fun SoundScapeFilterChip(
                 horizontalArrangement = Arrangement.spacedBy(spacing.space8),
             ) {
                 if (selected) {
-                    // Decorative check; selection is exposed once by the selectable Surface.
                     Canvas(Modifier.size(spacing.space24)) {
                         val stroke = 1.8.dp.toPx()
                         drawLine(content, Offset(size.width * .2f, size.height * .5f),

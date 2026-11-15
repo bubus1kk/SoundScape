@@ -1,6 +1,10 @@
 package com.soundscape.app
 
 import android.os.Bundle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.luminance
+import androidx.core.view.WindowCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -9,18 +13,40 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 import com.soundscape.app.presentation.shell.ShellScreen
 import com.soundscape.app.presentation.shell.ShellViewModel
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.soundscape.app.presentation.settings.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
+
+private const val LIGHT_BACKGROUND_THRESHOLD = 0.5f
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val shellViewModel = ViewModelProvider(this)[ShellViewModel::class.java]
+        val settingsModel = ViewModelProvider(this)[SettingsViewModel::class.java]
+        var initialReadPending = true
+        splash.setKeepOnScreenCondition {
+            if (!settingsModel.state.value.initialLoading) initialReadPending = false
+            initialReadPending
+        }
         setContent {
+            val settingsState = settingsModel.state.collectAsStateWithLifecycle()
             val state = shellViewModel.state.collectAsStateWithLifecycle()
-            SoundScapeTheme {
-                ShellScreen(state.value)
+            val currentSettings = settingsState.value
+            AppearanceGate(currentSettings, settingsModel::retryRead) { options ->
+                SoundScapeTheme(options = options) {
+                    val lightBars = MaterialTheme.colorScheme.background.luminance() > LIGHT_BACKGROUND_THRESHOLD
+                    SideEffect {
+                        WindowCompat.getInsetsController(window, window.decorView).apply {
+                            isAppearanceLightStatusBars = lightBars
+                            isAppearanceLightNavigationBars = lightBars
+                        }
+                    }
+                    ShellScreen(state.value)
+                }
             }
         }
     }

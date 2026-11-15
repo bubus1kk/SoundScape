@@ -1,0 +1,464 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "1322ae92c8ac1728705db586dab48f09",
+    "entities": [
+      {
+        "tableName": "cache_queries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope` TEXT NOT NULL, `queryKey` TEXT NOT NULL, `generation` INTEGER NOT NULL, PRIMARY KEY(`scope`, `queryKey`))",
+        "fields": [
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queryKey",
+            "columnName": "queryKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generation",
+            "columnName": "generation",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope",
+            "queryKey"
+          ]
+        }
+      },
+      {
+        "tableName": "cache_pages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope` TEXT NOT NULL, `queryKey` TEXT NOT NULL, `queryType` TEXT NOT NULL, `offset` INTEGER NOT NULL, `limit` INTEGER NOT NULL, `generation` INTEGER NOT NULL, `fetchedAt` INTEGER NOT NULL, `hasMore` INTEGER NOT NULL, PRIMARY KEY(`scope`, `queryKey`, `offset`, `limit`), FOREIGN KEY(`scope`, `queryKey`) REFERENCES `cache_queries`(`scope`, `queryKey`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queryKey",
+            "columnName": "queryKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queryType",
+            "columnName": "queryType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offset",
+            "columnName": "offset",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "limit",
+            "columnName": "limit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generation",
+            "columnName": "generation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasMore",
+            "columnName": "hasMore",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope",
+            "queryKey",
+            "offset",
+            "limit"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "cache_queries",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "scope",
+              "queryKey"
+            ],
+            "referencedColumns": [
+              "scope",
+              "queryKey"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "cached_places",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope` TEXT NOT NULL, `kind` TEXT NOT NULL, `id` TEXT NOT NULL, `latitude` REAL NOT NULL, `longitude` REAL NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `playlistId` TEXT, `coverPath` TEXT, PRIMARY KEY(`scope`, `kind`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "playlistId",
+            "columnName": "playlistId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "coverPath",
+            "columnName": "coverPath",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope",
+            "kind",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "cached_tracks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope` TEXT NOT NULL, `id` TEXT NOT NULL, `title` TEXT NOT NULL, `artist` TEXT NOT NULL, `durationMs` INTEGER NOT NULL, `availability` TEXT NOT NULL, PRIMARY KEY(`scope`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "artist",
+            "columnName": "artist",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "availability",
+            "columnName": "availability",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "map_page_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope` TEXT NOT NULL, `queryKey` TEXT NOT NULL, `offset` INTEGER NOT NULL, `limit` INTEGER NOT NULL, `position` INTEGER NOT NULL, `kind` TEXT NOT NULL, `id` TEXT NOT NULL, PRIMARY KEY(`scope`, `queryKey`, `offset`, `limit`, `position`), FOREIGN KEY(`scope`, `queryKey`, `offset`, `limit`) REFERENCES `cache_pages`(`scope`, `queryKey`, `offset`, `limit`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`scope`, `kind`, `id`) REFERENCES `cached_places`(`scope`, `kind`, `id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queryKey",
+            "columnName": "queryKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offset",
+            "columnName": "offset",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "limit",
+            "columnName": "limit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope",
+            "queryKey",
+            "offset",
+            "limit",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_map_page_items_scope_kind_id",
+            "unique": false,
+            "columnNames": [
+              "scope",
+              "kind",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_map_page_items_scope_kind_id` ON `${TABLE_NAME}` (`scope`, `kind`, `id`)"
+          },
+          {
+            "name": "index_map_page_items_scope_queryKey_offset_limit_kind_id",
+            "unique": true,
+            "columnNames": [
+              "scope",
+              "queryKey",
+              "offset",
+              "limit",
+              "kind",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_map_page_items_scope_queryKey_offset_limit_kind_id` ON `${TABLE_NAME}` (`scope`, `queryKey`, `offset`, `limit`, `kind`, `id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "cache_pages",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "scope",
+              "queryKey",
+              "offset",
+              "limit"
+            ],
+            "referencedColumns": [
+              "scope",
+              "queryKey",
+              "offset",
+              "limit"
+            ]
+          },
+          {
+            "table": "cached_places",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "scope",
+              "kind",
+              "id"
+            ],
+            "referencedColumns": [
+              "scope",
+              "kind",
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "track_page_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope` TEXT NOT NULL, `queryKey` TEXT NOT NULL, `offset` INTEGER NOT NULL, `limit` INTEGER NOT NULL, `position` INTEGER NOT NULL, `id` TEXT NOT NULL, PRIMARY KEY(`scope`, `queryKey`, `offset`, `limit`, `position`), FOREIGN KEY(`scope`, `queryKey`, `offset`, `limit`) REFERENCES `cache_pages`(`scope`, `queryKey`, `offset`, `limit`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`scope`, `id`) REFERENCES `cached_tracks`(`scope`, `id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queryKey",
+            "columnName": "queryKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offset",
+            "columnName": "offset",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "limit",
+            "columnName": "limit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope",
+            "queryKey",
+            "offset",
+            "limit",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_track_page_items_scope_id",
+            "unique": false,
+            "columnNames": [
+              "scope",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_track_page_items_scope_id` ON `${TABLE_NAME}` (`scope`, `id`)"
+          },
+          {
+            "name": "index_track_page_items_scope_queryKey_offset_limit_id",
+            "unique": true,
+            "columnNames": [
+              "scope",
+              "queryKey",
+              "offset",
+              "limit",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_track_page_items_scope_queryKey_offset_limit_id` ON `${TABLE_NAME}` (`scope`, `queryKey`, `offset`, `limit`, `id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "cache_pages",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "scope",
+              "queryKey",
+              "offset",
+              "limit"
+            ],
+            "referencedColumns": [
+              "scope",
+              "queryKey",
+              "offset",
+              "limit"
+            ]
+          },
+          {
+            "table": "cached_tracks",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "scope",
+              "id"
+            ],
+            "referencedColumns": [
+              "scope",
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1322ae92c8ac1728705db586dab48f09')"
+    ]
+  }
+}

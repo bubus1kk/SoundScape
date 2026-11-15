@@ -3,7 +3,6 @@ package com.soundscape.app.core.designsystem.ui.theme
 
 import androidx.compose.material3.ColorScheme
 
-/** All extended roles come from the SAME dynamic scheme, never from a static preset. */
 internal fun dynamicSoundScapeColors(scheme: ColorScheme) = SoundScapeColors(
     background = scheme.background,
     surface = scheme.surface,

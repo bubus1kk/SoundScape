@@ -7,7 +7,10 @@ plugins {
 android {
     namespace = "com.soundscape.app.core.data"
     compileSdk = 37
-    defaultConfig { minSdk = 26 }
+    defaultConfig {
+        minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -19,12 +22,21 @@ detekt {
     config.setFrom(rootProject.file("config/detekt/detekt.yml"))
 }
 dependencies {
+    implementation(libs.room.runtime)
+    implementation(libs.datastore.preferences)
+    implementation(project(":core:database"))
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.retrofit)
     implementation(libs.okhttp)
     implementation(libs.serialization.json)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.room.runtime)
+    androidTestImplementation(libs.mockwebserver)
+    androidTestImplementation(libs.retrofit.serialization)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit)
     testImplementation(libs.retrofit.serialization)
     testImplementation(libs.kotlinx.coroutines.test)

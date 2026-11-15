@@ -20,7 +20,6 @@ import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 
 enum class SoundScapeButtonVariant { Primary, Secondary, Outlined, Destructive }
 
-/** Loading changes the label, not the geometry or the externally owned state. */
 @Composable
 fun SoundScapeButton(
     text: String,
@@ -45,7 +44,6 @@ fun SoundScapeButton(
         else -> colors.primary
     }
     val loadingDescription = stringResource(R.string.soundscape_loading)
-    // Keep the enabled appearance while loading, but disable interaction through Material.
     val buttonColors = ButtonDefaults.buttonColors(
         containerColor = container,
         contentColor = content,

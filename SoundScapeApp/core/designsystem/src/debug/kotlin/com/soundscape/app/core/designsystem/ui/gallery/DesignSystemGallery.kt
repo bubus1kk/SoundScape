@@ -23,7 +23,6 @@ import androidx.compose.ui.text.TextStyle
 import com.soundscape.app.core.designsystem.ui.components.*
 import com.soundscape.app.core.designsystem.ui.theme.*
 
-/** Debug-only diagnostic UI, using the same theme and components as the application. */
 @Composable
 fun DesignSystemGallery(onDarkModeChanged: (Boolean) -> Unit = {}) {
     var presetName by rememberSaveable { mutableStateOf(SoundScapePreset.Atlas.name) }
@@ -54,7 +53,6 @@ fun DesignSystemGallery(onDarkModeChanged: (Boolean) -> Unit = {}) {
                     horizontalArrangement = Arrangement.spacedBy(spacing.space8)) {
                     Text("Dynamic Color", Modifier.weight(1f))
                     Switch(dynamic, { dynamic = it }, modifier = Modifier.semantics {
-                        // The visible label remains readable; the switch also has its own name.
                         this[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription] = listOf("Dynamic Color")
                     })
                 }
@@ -125,7 +123,6 @@ private fun ColorRows(colors: List<Pair<String, Color>>) {
                 shape = MaterialTheme.shapes.small,
                 border = androidx.compose.foundation.BorderStroke(
                     androidx.compose.ui.unit.Dp.Hairline, SoundScapeTheme.colors.outline)) { }
-            // Formatting only: this string is never parsed to construct an interface color.
             Text("$name  #${Integer.toHexString(color.toArgb()).uppercase().padStart(8, '0')}",
                 Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         }

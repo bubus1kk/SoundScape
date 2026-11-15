@@ -2,7 +2,6 @@ package com.soundscape.app.core.designsystem.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/** Verified against Figma foundation swatches (78 values); opacity 1. */
 object SoundScapePalettes {
     val AtlasLight = SoundScapeColors(
         background = Color(0xFFF5F7FC),

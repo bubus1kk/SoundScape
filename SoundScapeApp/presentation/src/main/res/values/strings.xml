@@ -1,0 +1,4 @@
+<resources>
+    <string name="settings_read_error">Не удалось прочитать настройки.</string>
+    <string name="settings_retry">Повторить</string>
+</resources>

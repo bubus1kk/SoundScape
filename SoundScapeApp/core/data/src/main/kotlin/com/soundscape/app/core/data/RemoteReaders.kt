@@ -150,6 +150,7 @@ class RemoteVisiblePlacesReader @Inject constructor(
         return call.execute({ api.get().visible(VisiblePlacesRequestDto(
             bounds.southWest.latitude, bounds.southWest.longitude,
             bounds.northEast.latitude, bounds.northEast.longitude, page.limit, page.offset)) }) {
+            require(it.limit == page.limit && it.offset == page.offset)
             Page(it.items.map { item -> item.toDomain() }, it.hasMore)
         }
     }
@@ -157,7 +158,7 @@ class RemoteVisiblePlacesReader @Inject constructor(
 class RemoteTrackSearcher @Inject constructor(
     private val api: Lazy<TracksApi>, private val call: RemoteCall,
 ) : TrackSearcher {
-    @Suppress("ReturnCount") // Reject invalid inputs before sending any HTTP request.
+    @Suppress("ReturnCount")
     override suspend fun search(parameters: MusicSearch): DomainResult<Page<Track>> {
         if (parameters.page.offset !in 0..1000 || parameters.page.limit !in 1..50)
             return DomainResult.Failure(DomainError.Validation("page", "outside_range"))
@@ -170,6 +171,7 @@ class RemoteTrackSearcher @Inject constructor(
         return call.execute({ api.get().search(SearchTracksRequestDto(parameters.query,
             parameters.onlyInApp, parameters.page.limit, parameters.page.offset,
             parameters.genreIds, parameters.moodIds)) }) {
+            require(it.limit == parameters.page.limit && it.offset == parameters.page.offset)
             Page(it.items.map { item -> item.toDomain() }, it.hasMore)
         }
     }

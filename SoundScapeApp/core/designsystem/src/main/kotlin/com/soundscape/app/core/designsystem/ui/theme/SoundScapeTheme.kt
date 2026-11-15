@@ -23,7 +23,6 @@ object SoundScapeTheme {
     val radii: SoundScapeRadii get() = SoundScapeRadii
 }
 
-/** No persistence, navigation or Activity side effects. Default: Atlas / System / dynamic off. */
 @Composable
 fun SoundScapeTheme(
     options: ThemeOptions = ThemeOptions(),
