@@ -115,4 +115,13 @@ class LibraryViewModelTest {
         assertTrue(model.area.value.bounds().crossesAntimeridian)
         assertNull(model.places.value.cached)
     }
+    @Test fun diaryAndReconnectDoNotRequestNetwork() = runTest(dispatcher) {
+        model.open(LibraryTab.DIARY)
+        model.refreshActive()
+        runCurrent()
+        assertEquals(LibraryTab.DIARY, model.tab.value)
+        assertEquals(0, places.calls)
+        assertTrue(search.calls.isEmpty())
+    }
+
 }

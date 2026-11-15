@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -30,23 +31,27 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun LibraryScreen(model: LibraryViewModel, settings: @Composable () -> Unit) {
+fun LibraryScreen(model: LibraryViewModel, diary: @Composable () -> Unit = {},
+    open: (LibraryTab) -> Unit = model::open, settings: @Composable () -> Unit) {
     val tab by model.tab.collectAsState()
     Column(Modifier.fillMaxSize()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(SoundScapeSpacing.space8)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(SoundScapeSpacing.space8)) {
             LibraryTab.entries.forEach { destination ->
                 val label = when (destination) {
                     LibraryTab.PLACES -> R.string.library_places
                     LibraryTab.SEARCH -> R.string.library_search
                     LibraryTab.SETTINGS -> R.string.library_settings
+                    LibraryTab.DIARY -> R.string.library_diary
                 }
-                SoundScapeFilterChip(stringResource(label), tab == destination, { model.open(destination) })
+                SoundScapeFilterChip(stringResource(label), tab == destination, { open(destination) })
             }
         }
         when (tab) {
             LibraryTab.PLACES -> PlacesContent(model)
             LibraryTab.SEARCH -> SearchContent(model)
             LibraryTab.SETTINGS -> settings()
+            LibraryTab.DIARY -> diary()
         }
     }
 }

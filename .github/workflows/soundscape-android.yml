@@ -54,7 +54,10 @@ jobs:
       - name: Build debug APK
         run: sh ./gradlew :app:assembleDebug --no-daemon
       - name: Verify exported Room schema
-        run: git diff --exit-code -- core/database/schemas
+        run: |
+          test -f core/database/schemas/com.soundscape.app.core.database.SoundScapeDatabase/2.json
+          test "$(git hash-object core/database/schemas/com.soundscape.app.core.database.SoundScapeDatabase/1.json)" = "b046a41ea9ec536b99fce5134800a1a969fcbd52"
+          git diff --exit-code -- core/database/schemas
       - name: Unit tests
         run: sh ./gradlew :core:database:testDebugUnitTest :app:testDebugUnitTest :presentation:testDebugUnitTest :core:network:testDebugUnitTest :core:data:testDebugUnitTest --no-daemon
       - name: Detekt

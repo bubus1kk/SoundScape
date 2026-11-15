@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class LibraryTab { PLACES, SEARCH, SETTINGS }
+enum class LibraryTab { PLACES, SEARCH, DIARY, SETTINGS }
 
 data class MapArea(val south: Double, val west: Double, val north: Double, val east: Double) {
     fun bounds(): GeoBounds {
@@ -79,7 +79,7 @@ class LibraryViewModel @Inject constructor(
                 }
                 refreshActive()
             }
-            LibraryTab.SETTINGS -> Unit
+            LibraryTab.SETTINGS, LibraryTab.DIARY -> Unit
         }
     }
 
@@ -114,7 +114,7 @@ class LibraryViewModel @Inject constructor(
             when (tab.value) {
                 LibraryTab.PLACES -> refreshPlaces(area.value.bounds(), page.value)
                 LibraryTab.SEARCH -> search.value?.let { refreshSearch(it) }
-                LibraryTab.SETTINGS -> Unit
+                LibraryTab.SETTINGS, LibraryTab.DIARY -> Unit
             }
         }
     }

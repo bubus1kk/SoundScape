@@ -15,7 +15,11 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun database(@ApplicationContext context: Context): SoundScapeDatabase =
-        Room.databaseBuilder(context, SoundScapeDatabase::class.java, "soundscape-cache.db").build()
+        Room.databaseBuilder(context, SoundScapeDatabase::class.java, "soundscape-cache.db")
+            .addMigrations(MIGRATION_1_2).build()
+
+    @Provides
+    fun diaryDraftDao(database: SoundScapeDatabase): DiaryDraftDao = database.diaryDraftDao()
 
     @Provides
     fun cacheDao(database: SoundScapeDatabase): CacheDao = database.cacheDao()
