@@ -6,6 +6,8 @@ import com.soundscape.app.core.data.cache.OfflineFirstVisiblePlaces
 import com.soundscape.app.core.data.cache.OfflineFirstTrackSearcher
 import com.soundscape.app.core.domain.repository.VisiblePlacesCache
 import com.soundscape.app.core.domain.repository.TrackSearchCache
+import com.soundscape.app.core.domain.repository.PlaylistReader
+import com.soundscape.app.core.domain.repository.PlaybackSourceResolver
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -18,4 +20,6 @@ abstract class DataModule {
     @Binds abstract fun search(searcher: OfflineFirstTrackSearcher): TrackSearcher
     @Binds abstract fun mapCache(reader: OfflineFirstVisiblePlaces): VisiblePlacesCache
     @Binds abstract fun trackCache(reader: OfflineFirstTrackSearcher): TrackSearchCache
+    @Binds abstract fun playlistReader(reader: RemotePlaylistReader): PlaylistReader
+    @Binds abstract fun playbackSourceResolver(resolver: RemotePlaybackSourceResolver): PlaybackSourceResolver
 }

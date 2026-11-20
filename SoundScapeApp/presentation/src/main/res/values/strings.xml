@@ -1,4 +1,35 @@
 <resources>
+    <string name="nav_music">Музыка</string>
+    <string name="nav_map">Карта</string>
+    <string name="nav_library">Моя медиатека</string>
+    <string name="home_profile">Профиль</string>
+    <string name="home_search">Поиск музыки и мест</string>
+    <string name="home_world">Музыка со всего мира</string>
+    <string name="home_ai">Свой плейлист с ИИ</string>
+    <string name="home_ai_description">Опиши настроение — мы подберём музыку</string>
+    <string name="home_create">Создать плейлист</string>
+    <string name="home_pending">Этот раздел ещё не реализован.</string>
+    <string name="home_back">Назад</string>
+    <string name="home_refresh_error">Не удалось обновить данные. Попробуйте ещё раз.</string>
+    <string name="home_error">Не удалось загрузить города</string>
+    <string name="home_empty">Опубликованных городов пока нет</string>
+    <string name="home_cached">Показываем сохранённые города</string>
     <string name="settings_read_error">Не удалось прочитать настройки.</string>
     <string name="settings_retry">Повторить</string>
+    <string name="home_empty_description">Города появятся здесь после публикации.</string>
+    <string name="home_error_description">Список городов сейчас недоступен. Попробуйте загрузить его ещё раз.</string>
+    <string name="home_offline">Нет подключения. Подключитесь к интернету для обновления.</string>
+    <string name="home_cache_error">Не удалось обновить. Показываем сохранённые города.</string>
+    <string name="home_update">Обновить</string>
+    <string name="home_city_playlist_unavailable">Просмотр подборок пока недоступен.</string>
+    <string name="home_profile_unavailable">Профиль пока недоступен.</string>
+    <string name="home_search_unavailable">Поиск пока недоступен.</string>
+    <string name="home_ai_unavailable">Генерация плейлистов пока недоступна.</string>
+    <string name="home_city_no_playlist">У этого города пока нет доступного плейлиста.</string>
+    <string name="home_cached_empty_description">Сохранённый результат: опубликованных городов пока нет.</string>
+    <string name="home_timeout">Время ожидания истекло. Попробуйте ещё раз.</string>
+    <string name="home_rate_limited">Слишком много запросов. Повторите позже.</string>
+    <string name="home_cache_offline">Нет подключения. Показываем сохранённые города.</string>
+    <string name="home_cache_timeout">Время ожидания истекло. Показываем сохранённые города.</string>
+    <string name="home_cache_rate_limited">Лимит запросов. Показываем сохранённые города.</string>
 </resources>

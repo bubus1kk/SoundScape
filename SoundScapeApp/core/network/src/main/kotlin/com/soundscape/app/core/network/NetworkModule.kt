@@ -30,9 +30,19 @@ class ApiCredentialsInterceptor(
         val request = chain.request()
         val origin = config.url.toHttpUrl()
         check(request.url.host == origin.host && request.url.port == origin.port && request.url.scheme == origin.scheme)
-        val token = if (request.header("X-Soundscape-Guest") == "true") null else tokens.currentAccessToken()
+        val policy = RequestAuthPolicy.valueOf(checkNotNull(request.header("X-Soundscape-Auth")) {
+            "Request authentication policy required"
+        })
+        val token = when (policy) {
+            RequestAuthPolicy.Public -> null
+            RequestAuthPolicy.Authenticated -> checkNotNull(tokens.currentAccessToken()?.takeIf { it.isNotBlank() }) {
+                "Authentication required"
+            }
+            RequestAuthPolicy.OptionalUser -> tokens.currentAccessToken()
+        }
         val builder = request.newBuilder().header("apikey", config.publishableKey).removeHeader("Authorization")
         builder.removeHeader("X-Soundscape-Guest")
+        builder.removeHeader("X-Soundscape-Auth")
         if (!token.isNullOrBlank()) builder.header("Authorization", "Bearer $token")
         return chain.proceed(builder.build())
     }
@@ -73,4 +83,7 @@ object NetworkModule {
     }
     @Provides fun places(retrofit: Retrofit): PlacesApi = retrofit.create(PlacesApi::class.java)
     @Provides fun tracks(retrofit: Retrofit): TracksApi = retrofit.create(TracksApi::class.java)
+    @Provides fun playlists(retrofit: Retrofit): PlaylistsApi = retrofit.create(PlaylistsApi::class.java)
+    @Provides fun resolveTrack(retrofit: Retrofit): ResolveTrackApi = retrofit.create(ResolveTrackApi::class.java)
+    @Provides fun media(retrofit: Retrofit): MediaApi = retrofit.create(MediaApi::class.java)
 }

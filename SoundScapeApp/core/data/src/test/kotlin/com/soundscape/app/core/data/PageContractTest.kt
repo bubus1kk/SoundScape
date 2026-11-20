@@ -10,6 +10,7 @@ import com.soundscape.app.core.domain.model.PageRequest
 import com.soundscape.app.core.domain.model.TrackAvailability
 import com.soundscape.app.core.network.ConnectivityChecker
 import com.soundscape.app.core.network.NetworkConfig
+import com.soundscape.app.core.network.NetworkModule
 import com.soundscape.app.core.network.PlacesApi
 import com.soundscape.app.core.network.TracksApi
 import dagger.Lazy
@@ -43,6 +44,55 @@ class PageContractTest {
         ConnectivityChecker { false }, NetworkErrorMapper(Json))
     private fun page(vararg items: String) =
         """{"items":[${items.joinToString()}],"limit":20,"offset":0,"hasMore":true}"""
+
+    @Test fun `supabase twenty cities deserialize with production JSON and nullable playlists`() = runTest {
+        MockWebServer().use { server ->
+            val json = NetworkModule.json()
+            val api = Retrofit.Builder().baseUrl(server.url("/"))
+                .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+                .build().create(PlacesApi::class.java)
+            val reader = RemoteVisiblePlacesReader(Lazy { api }, call())
+            val cities = (1..20).joinToString(",") { index ->
+                """{"id":"${UUID(0, index.toLong())}","kind":"CITY","title":"City $index",
+                    "latitude":55.5,"longitude":37.5,"description":null,"playlistId":null,"coverPath":null}"""
+            }
+            server.enqueue(MockResponse().setBody(
+                """{"items":[$cities],"limit":100,"offset":0,"hasMore":false}"""))
+            val world = (GeoBounds.create(
+                (GeoPoint.create(-90.0, -180.0) as DomainResult.Success).value,
+                (GeoPoint.create(90.0, 180.0) as DomainResult.Success).value,
+            ) as DomainResult.Success).value
+
+            val result = reader.getVisible(world, PageRequest(100, 0)) as DomainResult.Success
+            assertEquals(20, result.value.items.size)
+            assertEquals(20, result.value.items.map { it.id }.distinct().size)
+            assertTrue(result.value.items.all { it.kind == MapPlaceKind.CITY && it.playlistId == null })
+            assertEquals(false, result.value.hasMore)
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("/rest/v1/rpc/get_visible_places", request.path)
+            assertEquals(json.parseToJsonElement(
+                """{"minLat":-90.0,"minLon":-180.0,"maxLat":90.0,"maxLon":180.0,"limit":100,"offset":0}"""),
+                json.parseToJsonElement(request.body.readUtf8()))
+        }
+    }
+
+    @Test fun `successful empty cities page remains a success`() = runTest {
+        MockWebServer().use { server ->
+            val json = NetworkModule.json()
+            val api = Retrofit.Builder().baseUrl(server.url("/"))
+                .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+                .build().create(PlacesApi::class.java)
+            val reader = RemoteVisiblePlacesReader(Lazy { api }, call())
+            for (hasMore in listOf(false, true)) {
+                server.enqueue(MockResponse().setBody(
+                    """{"items":[],"limit":100,"offset":0,"hasMore":$hasMore}"""))
+                val result = reader.getVisible(bounds, PageRequest(100, 0)) as DomainResult.Success
+                assertTrue(result.value.items.isEmpty())
+                assertEquals(hasMore, result.value.hasMore)
+            }
+        }
+    }
 
     @Test fun `nonempty places map complete JSON to domain`() = runTest {
         MockWebServer().use { server ->

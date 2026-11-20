@@ -2,8 +2,7 @@ package com.soundscape.app
 
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
@@ -61,13 +60,12 @@ class AppearanceSettingsTest {
 
     private fun assertSavedTheme() {
         compose.waitUntil(15000) {
-            runCatching { compose.onAllNodesWithText("SoundScape").fetchSemanticsNodes().isNotEmpty() }
-                .getOrDefault(false)
+            runCatching { compose.onNodeWithTag("home-feed").assertExists() }.isSuccess
         }
-        compose.onNodeWithText("SoundScape").assertExists()
+        compose.onNodeWithTag("home-feed").assertExists()
         val pixels = compose.onRoot().captureToImage().toPixelMap()
         assertEquals(SoundScapePalettes.VioletDark.background.toArgb(),
-            pixels[pixels.width / 2, pixels.height / 2].toArgb())
+            pixels[pixels.width - 1, pixels.height / 2].toArgb())
         compose.runOnIdle {
             val controller = WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView)
             assertFalse(controller.isAppearanceLightStatusBars)

@@ -35,6 +35,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.room.runtime)
     androidTestImplementation(libs.mockwebserver)
+    androidTestImplementation(libs.okhttp.tls)
     androidTestImplementation(libs.retrofit.serialization)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit)

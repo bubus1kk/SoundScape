@@ -16,11 +16,12 @@ import com.soundscape.app.core.domain.model.GeoPoint
 import com.soundscape.app.core.domain.model.MusicSearch
 import com.soundscape.app.core.domain.model.PageRequest
 import com.soundscape.app.core.domain.model.Track
-import com.soundscape.app.core.network.AccessTokenProvider
 import com.soundscape.app.core.network.ConnectivityChecker
 import com.soundscape.app.core.network.NetworkConfig
 import com.soundscape.app.core.network.PlacesApi
 import com.soundscape.app.core.network.TracksApi
+import com.soundscape.app.core.network.AccessTokenProvider
+import com.soundscape.app.core.network.NetworkModule
 import dagger.Lazy
 import java.util.UUID
 import kotlinx.coroutines.CoroutineStart
@@ -32,6 +33,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,14 +54,22 @@ class OfflineRoomIntegrationTest {
     private lateinit var api: Retrofit
     private var offline = false
     private var configured = true
+    private var token: String? = null
     private val id = UUID.randomUUID().toString()
     private val query = MusicSearch("ambient")
     private val connectivity = ConnectivityChecker { offline }
     private fun openDb() { db = Room.databaseBuilder(context, SoundScapeDatabase::class.java, name).build() }
     @Before fun setup() {
         openDb()
-        server = MockWebServer().apply { start() }
-        api = Retrofit.Builder().baseUrl(server.url("/"))
+        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
+        val clientTls = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
+        server = MockWebServer().apply { useHttps(serverTls.sslSocketFactory(), false); start() }
+        val baseUrl = server.url("/").newBuilder().host("localhost").build()
+        val client = NetworkModule.client(NetworkConfig(baseUrl.toString(), "sb_publishable_test"),
+            AccessTokenProvider { token }).newBuilder()
+            .sslSocketFactory(clientTls.sslSocketFactory(), clientTls.trustManager).build()
+        api = Retrofit.Builder().baseUrl(baseUrl).client(client)
             .addConverterFactory(Json.asConverterFactory("application/json".toMediaType())).build()
     }
     @After fun close() { db.close(); context.deleteDatabase(name); server.shutdown() }
@@ -67,10 +78,27 @@ class OfflineRoomIntegrationTest {
         connectivity, NetworkErrorMapper(Json))
     private fun tracks() = OfflineFirstTrackSearcher(
         RemoteTrackSearcher(Lazy { api.create(TracksApi::class.java) }, call()), RoomTrackStorage(db.cacheDao()),
-        connectivity, AccessTokenProvider { null })
+        connectivity)
     private fun response(duration: Long = 1000) =
         """{"items":[{"id":"$id","title":"Track","artist":"Artist","durationMs":$duration,
         "availability":"IN_APP"}],"limit":20,"offset":0,"hasMore":false}"""
+
+    @Test fun publicCacheAndRefreshSurviveSessionChanges() = runBlocking {
+        val repository = tracks()
+        for (value in listOf(null, "synthetic-first", "synthetic-second", null)) {
+            token = value
+            server.enqueue(MockResponse().setBody(response()))
+            assertEquals(DomainResult.Success(Unit), repository.refresh(query))
+            val request = server.takeRequest()
+            assertNull(request.getHeader("Authorization"))
+            assertNull(request.getHeader("X-Soundscape-Auth"))
+            offline = true
+            assertTrue(repository.search(query) is DomainResult.Success)
+            assertEquals(id, repository.observe(query).first().cached!!.page.items.single().id.toString())
+            offline = false
+        }
+        assertEquals(4, server.requestCount)
+    }
 
     @Test fun actualHttpResultPersistsAcrossFileReopenAndOfflineWithoutConfig() = runBlocking {
         server.enqueue(MockResponse().setBody(response()))
@@ -130,7 +158,7 @@ class OfflineRoomIntegrationTest {
         val bounds = (GeoBounds.create(sw, ne) as DomainResult.Success).value
         val repository = OfflineFirstVisiblePlaces(RemoteVisiblePlacesReader(
             Lazy { api.create(PlacesApi::class.java) }, call()), RoomMapStorage(db.cacheDao()),
-            connectivity, AccessTokenProvider { null })
+            connectivity)
         server.enqueue(MockResponse().setBody("""{"items":[{"id":"$id","kind":"PIN","title":"Pin",
             "latitude":1.0,"longitude":179.0,"description":"Details","playlistId":"$id","coverPath":"cover"}],
             "limit":20,"offset":0,"hasMore":true}"""))
@@ -140,9 +168,16 @@ class OfflineRoomIntegrationTest {
         assertEquals("cover", initial.value.items.single().coverPath)
         val request = server.takeRequest()
         assertEquals("/rest/v1/rpc/get_visible_places", request.path)
+        assertNull(request.getHeader("Authorization"))
         assertTrue(request.body.readUtf8().contains("170.0"))
+        token = "synthetic-signed-in"
         offline = true
         assertEquals(initial, repository.getVisible(bounds, PageRequest()))
+        assertEquals(initial.value, repository.observe(bounds, PageRequest()).first().cached!!.page)
+        offline = false
+        server.enqueue(MockResponse().setBody("""{"items":[],"limit":20,"offset":0,"hasMore":false}"""))
+        assertEquals(DomainResult.Success(Unit), repository.refresh(bounds, PageRequest()))
+        assertNull(server.takeRequest().getHeader("Authorization"))
         val key = CacheKeys.map(-10.0, 170.0, 10.0, -170.0)
         assertNotNull(db.cacheDao().mapSnapshot("guest", key, 0, 20))
     }
@@ -151,6 +186,27 @@ class OfflineRoomIntegrationTest {
         assertEquals(DomainResult.Failure(DomainError.Unexpected), tracks().search(query))
         val key = CacheKeys.search(query.query, query.onlyInApp, query.genreIds, query.moodIds)
         assertNull(db.cacheDao().trackSnapshot("guest", key, 0, 20))
+    }
+    @Test fun homeCityPageSurvivesFailedRefreshAndDatabaseReopen() = runBlocking {
+        val bounds = (GeoBounds.create(
+            (GeoPoint.create(-90.0, -180.0) as DomainResult.Success).value,
+            (GeoPoint.create(90.0, 180.0) as DomainResult.Success).value) as DomainResult.Success).value
+        val page = PageRequest(100, 0)
+        fun repository() = OfflineFirstVisiblePlaces(RemoteVisiblePlacesReader(
+            Lazy { api.create(PlacesApi::class.java) }, call()), RoomMapStorage(db.cacheDao()), connectivity)
+        server.enqueue(MockResponse().setBody("""{"items":[{"id":"$id","kind":"CITY","title":"City",
+            "latitude":1.0,"longitude":2.0}],"limit":100,"offset":0,"hasMore":true}"""))
+        assertEquals(DomainResult.Success(Unit), repository().refresh(bounds, page))
+        val initial = repository().observe(bounds, page).first().cached!!
+        server.enqueue(MockResponse().setResponseCode(503))
+        assertEquals(DomainResult.Failure(DomainError.Server), repository().refresh(bounds, page))
+        assertEquals(initial, repository().observe(bounds, page).first().cached)
+        db.close(); openDb(); offline = true
+        val reopened = repository()
+        assertEquals(DomainResult.Failure(DomainError.Network), reopened.refresh(bounds, page))
+        assertEquals(initial, reopened.observe(bounds, page).first().cached)
+        assertEquals(DomainResult.Success(initial.page), reopened.getVisible(bounds, page))
+        assertEquals(2, server.requestCount)
     }
     @Test fun invalidSearchNeverReachesHttpEvenIfOtherPageIsCached() = runBlocking {
         server.enqueue(MockResponse().setBody(response()))

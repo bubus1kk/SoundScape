@@ -29,6 +29,7 @@ fun SoundScapeButton(
     enabled: Boolean = true,
     loading: Boolean = false,
     loadingText: String = stringResource(R.string.soundscape_loading),
+    compact: Boolean = false,
 ) {
     val colors = SoundScapeTheme.colors
     val spacing = SoundScapeTheme.spacing
@@ -53,20 +54,22 @@ fun SoundScapeButton(
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
-        modifier = modifier.heightIn(min = spacing.space48).semantics {
+        modifier = modifier.heightIn(min = if (compact) spacing.space32 else spacing.space48).semantics {
             if (loading) {
                 stateDescription = loadingDescription
                 liveRegion = LiveRegionMode.Polite
             }
         },
-        shape = MaterialTheme.shapes.medium,
+        shape = if (compact) MaterialTheme.shapes.extraSmall else MaterialTheme.shapes.medium,
         colors = buttonColors,
         elevation = null,
         border = if (variant == SoundScapeButtonVariant.Outlined) {
             BorderStroke(1.dp, if (enabled) colors.primary else colors.outline)
         } else null,
-        contentPadding = PaddingValues(horizontal = spacing.space16, vertical = spacing.space12),
+        contentPadding = PaddingValues(horizontal = spacing.space16,
+            vertical = if (compact) spacing.space4 else spacing.space12),
     ) {
-        Text(if (loading) loadingText else text, style = MaterialTheme.typography.labelLarge)
+        Text(if (loading) loadingText else text,
+            style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge)
     }
 }

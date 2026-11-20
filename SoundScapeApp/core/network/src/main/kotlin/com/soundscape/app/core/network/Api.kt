@@ -31,12 +31,12 @@ data class TrackViewDto(
 @Serializable
 data class CatalogPageDto(val items: List<TrackViewDto>, val limit: Int, val offset: Int, val hasMore: Boolean)
 interface PlacesApi {
-    @Headers("X-Soundscape-Guest: true")
+    @Headers("X-Soundscape-Auth: Public")
     @POST("rest/v1/rpc/get_visible_places")
     suspend fun visible(@Body request: VisiblePlacesRequestDto): Response<PlacePageDto>
 }
 interface TracksApi {
-    @Headers("X-Soundscape-Guest: true")
+    @Headers("X-Soundscape-Auth: Public")
     @POST("functions/v1/v1-search-tracks")
     suspend fun search(@Body request: SearchTracksRequestDto): Response<CatalogPageDto>
 }

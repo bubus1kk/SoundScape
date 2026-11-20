@@ -18,12 +18,19 @@ data class Playlist(
     val placeId: UUID? = null,
     val isEditorial: Boolean = false,
 ) {
-    fun validate(): DomainResult<Unit> {
+    fun validate(): DomainResult<Unit> = validate(minItems = 1)
+
+    fun validateForRead(): DomainResult<Unit> = validate(minItems = 0)
+
+    private fun validate(minItems: Int): DomainResult<Unit> {
         val titleResult = validateTitle(title)
         if (titleResult is DomainResult.Failure) return titleResult
         if (revision < 1) return invalid("revision", "positive")
         if (description != null && description.length > 2000) return invalid("description", "max_2000")
-        if (items.size !in 1..100) return invalid("items", "count_1_to_100")
+        if (items.size !in minItems..100) {
+            val reason = if (minItems == 0) "count_0_to_100" else "count_1_to_100"
+            return invalid("items", reason)
+        }
         for ((field, ids) in listOf("genreIds" to genreIds, "tagIds" to tagIds)) {
             if (ids.size > 30) return invalid(field, "max_30")
             if (ids.any { it <= 0 }) return invalid(field, "positive_ids")

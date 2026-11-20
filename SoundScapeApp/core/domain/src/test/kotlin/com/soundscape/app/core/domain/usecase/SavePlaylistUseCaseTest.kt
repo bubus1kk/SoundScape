@@ -11,6 +11,16 @@ class SavePlaylistUseCaseTest {
     private val repository = FakePlaylists()
     private val useCase = SavePlaylistUseCase(auth, repository)
 
+    @Test fun `empty track list prevents both creation and update`() = runTest {
+        val input = playlistInput().copy(trackIds = emptyList())
+        assertValidation(useCase(id, input))
+        assertValidation(useCase(id, input, expectedRevision = 2L))
+        assertEquals(0, repository.creates)
+        assertEquals(0, repository.updates)
+        assertEquals(0, repository.reads)
+        assertEquals(0, auth.calls)
+    }
+
     @Test fun `creation preserves duplicates metadata and order`() = runTest {
         val input = playlistInput()
         assertEquals(repository.result, useCase(id, input))

@@ -24,6 +24,7 @@ detekt {
 }
 
 dependencies {
+    implementation(project(":core:designsystem"))
     testImplementation(libs.kotlinx.coroutines.test)
     implementation(project(":core:domain"))
     implementation(platform(libs.androidx.compose.bom))
