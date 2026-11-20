@@ -22,7 +22,6 @@
     <string name="home_cache_error">Не удалось обновить. Показываем сохранённые города.</string>
     <string name="home_update">Обновить</string>
     <string name="home_city_playlist_unavailable">Просмотр подборок пока недоступен.</string>
-    <string name="home_profile_unavailable">Профиль пока недоступен.</string>
     <string name="home_search_unavailable">Поиск пока недоступен.</string>
     <string name="home_ai_unavailable">Генерация плейлистов пока недоступна.</string>
     <string name="home_city_no_playlist">У этого города пока нет доступного плейлиста.</string>

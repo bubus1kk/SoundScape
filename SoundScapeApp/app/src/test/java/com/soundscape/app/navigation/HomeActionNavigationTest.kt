@@ -4,6 +4,7 @@ import com.soundscape.app.presentation.R
 import com.soundscape.app.presentation.home.HomeAction
 import java.util.UUID
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HomeActionNavigationTest {
@@ -22,7 +23,7 @@ class HomeActionNavigationTest {
 
     @Test
     fun unavailableFeaturesHaveSpecificNotices() {
-        assertEquals(R.string.home_profile_unavailable, HomeAction.Profile.noticeResource())
+        assertNull(HomeAction.Profile.noticeResource())
         assertEquals(R.string.home_search_unavailable, HomeAction.Search.noticeResource())
         assertEquals(R.string.home_ai_unavailable, HomeAction.CreatePlaylist.noticeResource())
     }

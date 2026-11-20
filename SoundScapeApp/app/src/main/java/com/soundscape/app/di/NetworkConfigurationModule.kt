@@ -1,7 +1,6 @@
 package com.soundscape.app.di
 
 import com.soundscape.app.BuildConfig
-import com.soundscape.app.core.network.AccessTokenProvider
 import com.soundscape.app.core.network.NetworkConfig
 import com.soundscape.app.core.domain.repository.VisiblePlacesReader
 import com.soundscape.app.core.domain.repository.TrackSearcher
@@ -23,7 +22,6 @@ import dagger.hilt.components.SingletonComponent
 object NetworkConfigurationModule {
     @Provides fun config(): NetworkConfig = NetworkConfig(
         BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_PUBLISHABLE_KEY, BuildConfig.DEBUG)
-    @Provides fun tokens(): AccessTokenProvider = AccessTokenProvider { null }
     @Provides fun visible(reader: VisiblePlacesReader): GetVisiblePlacesUseCase = GetVisiblePlacesUseCase(reader)
     @Provides fun search(searcher: TrackSearcher): SearchMusicUseCase = SearchMusicUseCase(searcher)
     @Provides fun observePlaces(cache: VisiblePlacesCache) = ObserveVisiblePlacesUseCase(cache)

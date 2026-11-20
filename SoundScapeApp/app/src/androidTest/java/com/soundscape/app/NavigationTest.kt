@@ -1,23 +1,40 @@
 package com.soundscape.app
 
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso.pressBack
+import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
+import com.soundscape.app.core.domain.model.UserProfile
 import com.soundscape.app.navigation.SoundScapeNavHost
 import com.soundscape.app.presentation.home.HomeAction
 import com.soundscape.app.presentation.home.HomeScreen
 import com.soundscape.app.presentation.home.HomeUiState
+import com.soundscape.app.presentation.profile.PersonalProfileActions
+import com.soundscape.app.presentation.profile.PersonalProfileScreen
+import com.soundscape.app.presentation.profile.ProfileLoad
 import com.soundscape.app.presentation.R as PresentationR
+import java.util.UUID
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,10 +47,13 @@ class NavigationTest {
         val restoration = StateRestorationTester(compose)
         restoration.setContent {
             SoundScapeTheme {
-                SoundScapeNavHost(homeContent = { onAction ->
-                    SideEffect { dispatch = onAction }
-                    HomeScreen(HomeUiState.Empty(), {}, onAction)
-                })
+                SoundScapeNavHost(
+                    homeContent = { onAction ->
+                        SideEffect { dispatch = onAction }
+                        HomeScreen(HomeUiState.Empty(), {}, onAction)
+                    },
+                    personalContent = { Text(text(PresentationR.string.profile_mine)) },
+                )
             }
         }
         return restoration
@@ -59,7 +79,6 @@ class NavigationTest {
     @Test fun repeatedActionsShowOneNoticeAndKeepHomeVisible() {
         setContent()
         for ((action, message) in listOf(
-            HomeAction.Profile to PresentationR.string.home_profile_unavailable,
             HomeAction.Search to PresentationR.string.home_search_unavailable,
             HomeAction.CreatePlaylist to PresentationR.string.home_ai_unavailable,
         )) {
@@ -71,6 +90,52 @@ class NavigationTest {
         compose.onNodeWithText("Карта").performClick()
         pressBack()
         compose.onNodeWithTag("home-feed").assertExists()
+    }
+
+    @Test fun profileActionOpensProfileAndBackRestoresHome() {
+        setContent()
+        compose.runOnIdle { requireNotNull(dispatch)(HomeAction.Profile) }
+        compose.onNodeWithText(text(PresentationR.string.profile_mine)).assertIsDisplayed()
+        compose.onNodeWithText(text(PresentationR.string.nav_library)).assertIsSelected()
+        pressBack()
+        compose.onNodeWithTag("home-feed").assertIsDisplayed()
+    }
+
+    @Test fun guestCanOpenPersonalProfileAndReachRealSignInForm() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            val title = text(PresentationR.string.profile_sign_in_title)
+            compose.onNodeWithContentDescription(text(PresentationR.string.home_profile)).performClick()
+            compose.waitUntil(timeoutMillis = 10_000) {
+                compose.onAllNodes(hasText(title)).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText(title).assertIsDisplayed()
+            compose.onNodeWithText(text(PresentationR.string.profile_sign_in)).performClick()
+            compose.onNodeWithContentDescription(text(PresentationR.string.profile_email)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(text(PresentationR.string.profile_password)).assertIsDisplayed()
+        }
+    }
+
+    @Test fun narrowPersonalProfileWithLargeTextKeepsBothActionsAndLogoutReachable() {
+        val profile = UserProfile(UUID.randomUUID(), "u_${"abcd".repeat(10)}")
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.8f)) {
+                SoundScapeTheme {
+                    Box(Modifier.size(300.dp, 480.dp)) {
+                        PersonalProfileScreen(
+                            ProfileLoad.Content(profile),
+                            PersonalProfileActions({}, {}, {}, {}, {}, {}, {}, {}),
+                        )
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText(profile.displayName).assertIsDisplayed()
+        val edit = compose.onNodeWithText(text(PresentationR.string.profile_edit)).fetchSemanticsNode()
+        val publicView = compose.onNodeWithText(text(PresentationR.string.profile_public_view)).fetchSemanticsNode()
+        assertTrue(publicView.boundsInRoot.top > edit.boundsInRoot.top)
+        compose.onNodeWithText(text(PresentationR.string.profile_logout)).performScrollTo().performClick()
+        compose.onNodeWithText(text(PresentationR.string.profile_confirm_logout)).assertIsDisplayed()
     }
 
     @Test fun cityWithoutPlaylistHasHonestNoticeAndDoesNotOpenPlaylistScreen() {

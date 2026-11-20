@@ -1,5 +1,7 @@
 package com.soundscape.app.core.network
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 data class NetworkConfig(val url: String, val publishableKey: String, val debug: Boolean = false) {
@@ -18,4 +20,5 @@ fun interface AccessTokenProvider {
 
 fun interface ConnectivityChecker {
     fun isOffline(): Boolean
+    fun observeOffline(): Flow<Boolean> = flow { emit(isOffline()) }
 }

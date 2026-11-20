@@ -20,11 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 
 @Composable
-internal fun AppBottomBar(route: String?, navigate: (AppDestination) -> Unit) {
+internal fun AppBottomBar(route: String?, personalProfile: Boolean = false, navigate: (AppDestination) -> Unit) {
     val colors = SoundScapeTheme.colors
     Surface(color = colors.surface) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().selectableGroup()) {
@@ -38,8 +41,16 @@ internal fun AppBottomBar(route: String?, navigate: (AppDestination) -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(3.dp),
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(painterResource(destination.icon), null, Modifier.size(21.dp), tint = tint)
-                        Text(stringResource(destination.label), style = MaterialTheme.typography.bodySmall,
-                            color = tint, modifier = Modifier.padding(horizontal = 4.dp))
+                        val labelStyle = MaterialTheme.typography.bodySmall
+                        Text(
+                            stringResource(destination.label), color = tint,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                            textAlign = if (personalProfile) TextAlign.Center else null,
+                            style = if (personalProfile) labelStyle.copy(
+                                fontSize = 10.sp, lineHeight = 14.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else labelStyle.fontWeight,
+                            ) else labelStyle,
+                        )
                     }
                 }
             }

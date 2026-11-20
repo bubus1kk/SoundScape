@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
+    <exclude domain="sharedpref" path="profile_snapshots.xml" />
     <exclude domain="database" path="soundscape-cache.db" />
     <exclude domain="database" path="soundscape-cache.db-wal" />
     <exclude domain="database" path="soundscape-cache.db-shm" />

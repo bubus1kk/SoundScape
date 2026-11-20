@@ -99,6 +99,32 @@ class CredentialsHttpsTest {
             assertNull(request.getHeader("X-Soundscape-Auth"))
         }
     }
+    @Test fun `profile requests scope public data and use a fixed credential for writes`() =
+        kotlinx.coroutines.test.runTest {
+            server().use { server ->
+                val retrofit = retrofit2.Retrofit.Builder().baseUrl(url(server))
+                    .client(client(server, AccessTokenProvider { error("unexpected ambient token") }))
+                    .addConverterFactory(kotlinx.serialization.json.Json.asConverterFactory(
+                        "application/json".toMediaType())).build()
+                val api = retrofit.create(ProfileApi::class.java)
+                val owner = "eq.11111111-1111-4111-8111-111111111111"
+                for (playlist in listOf(true, false)) {
+                    server.enqueue(MockResponse().setBody("[]"))
+                    if (playlist) api.playlists(owner, 0, 100) else api.pins(owner, 0, 100)
+                    val request = server.takeRequest()
+                    assertEquals(owner, request.requestUrl?.queryParameter("owner_id"))
+                    assertEquals("eq.PUBLIC", request.requestUrl?.queryParameter("visibility"))
+                    assertNull(request.getHeader("Authorization"))
+                }
+                server.enqueue(MockResponse().setBody("[]"))
+                api.rename(owner, ProfileRenameDto("New name"), SessionCredential("session-at-dispatch"))
+                val write = server.takeRequest()
+                assertEquals("PATCH", write.method)
+                assertEquals(owner, write.requestUrl?.queryParameter("id"))
+                assertEquals("Bearer session-at-dispatch", write.getHeader("Authorization"))
+                assertEquals("""{"username":"New name"}""", write.body.readUtf8())
+            }
+        }
     @Test fun `both Retrofit APIs remain public across JWT changes`() = kotlinx.coroutines.test.runTest {
         server().use { server ->
             var token: String? = null

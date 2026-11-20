@@ -34,11 +34,15 @@ import com.soundscape.app.presentation.home.HomeViewModel
 
 @Composable
 fun SoundScapeNavHost(imageLoader: ImageLoader) {
-    SoundScapeNavHost(homeContent = { HomeRoute(it, imageLoader) })
+    SoundScapeNavHost(homeContent = { HomeRoute(it, imageLoader) }, imageLoader = imageLoader)
 }
 
 @Composable
-internal fun SoundScapeNavHost(homeContent: @Composable ((HomeAction) -> Unit) -> Unit) {
+internal fun SoundScapeNavHost(
+    homeContent: @Composable ((HomeAction) -> Unit) -> Unit,
+    imageLoader: ImageLoader? = null,
+    personalContent: @Composable ((() -> Unit) -> Unit)? = null,
+) {
     val controller = rememberNavController()
     val entry by controller.currentBackStackEntryAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -46,18 +50,22 @@ internal fun SoundScapeNavHost(homeContent: @Composable ((HomeAction) -> Unit) -
         containerColor = SoundScapeTheme.colors.background,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            AppBottomBar(entry?.destination?.route) { destination ->
-                controller.navigate(destination.route) {
-                    popUpTo(controller.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
+            val route = entry?.destination?.route
+            if (route != ProfileNavigation.Edit && route != ProfileNavigation.SignIn) {
+                val selected = if (route?.startsWith("profile") == true) AppDestination.Library.route else route
+                AppBottomBar(selected, personalProfile = route == ProfileNavigation.Own) { destination ->
+                    controller.navigate(destination.route) {
+                        popUpTo(controller.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 }
             }
         },
     ) { padding ->
         NavHost(controller, startDestination = AppDestination.Music.route, modifier = Modifier.padding(padding)) {
             composable(AppDestination.Music.route) {
-                HomeWithNotices(snackbar, homeContent)
+                HomeWithNotices(snackbar, homeContent) { controller.openProfileRoute(ProfileNavigation.Own) }
             }
             composable(AppDestination.Map.route) { PendingScreen(stringResource(R.string.nav_map)) {
                 controller.popBackStack(AppDestination.Music.route, false)
@@ -65,12 +73,13 @@ internal fun SoundScapeNavHost(homeContent: @Composable ((HomeAction) -> Unit) -
             composable(AppDestination.Library.route) { PendingScreen(stringResource(R.string.nav_library)) {
                 controller.popBackStack(AppDestination.Music.route, false)
             } }
+            installProfileRoutes(controller, imageLoader, personalContent)
         }
     }
 }
 
 @Composable
-private fun PendingScreen(title: String, back: () -> Unit) {
+internal fun PendingScreen(title: String, back: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(SoundScapeTheme.spacing.space24)) {
         Text(title, style = MaterialTheme.typography.headlineSmall)
         Text(stringResource(R.string.home_pending),
@@ -92,9 +101,12 @@ private fun HomeRoute(onAction: (HomeAction) -> Unit, imageLoader: ImageLoader) 
 private fun HomeWithNotices(
     snackbar: SnackbarHostState,
     homeContent: @Composable ((HomeAction) -> Unit) -> Unit,
+    openProfile: () -> Unit,
 ) {
     var notice by remember { mutableStateOf<Int?>(null) }
-    homeContent { notice = it.noticeResource() }
+    homeContent { action ->
+        if (action == HomeAction.Profile) openProfile() else notice = action.noticeResource()
+    }
     val message = notice?.let { stringResource(it) }
     LaunchedEffect(message) {
         if (message != null) {
@@ -104,8 +116,8 @@ private fun HomeWithNotices(
     }
 }
 
-internal fun HomeAction.noticeResource(): Int = when (this) {
-    HomeAction.Profile -> R.string.home_profile_unavailable
+internal fun HomeAction.noticeResource(): Int? = when (this) {
+    HomeAction.Profile -> null
     HomeAction.Search -> R.string.home_search_unavailable
     HomeAction.CreatePlaylist -> R.string.home_ai_unavailable
     is HomeAction.City -> if (playlistId == null) R.string.home_city_no_playlist

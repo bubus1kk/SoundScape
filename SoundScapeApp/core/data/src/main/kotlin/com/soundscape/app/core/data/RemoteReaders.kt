@@ -74,7 +74,7 @@ class NetworkErrorMapper @Inject constructor(private val json: Json) {
     fun http(status: Int, body: String?, retry: String?): DomainError {
         val root = runCatching { json.parseToJsonElement(body.orEmpty()).jsonObject }.getOrNull()
         val error = root?.get("error") as? JsonObject ?: root
-        val code = (error?.get("code") as? JsonPrimitive)?.contentOrNull
+        val code = ((error?.get("code") ?: error?.get("error_code")) as? JsonPrimitive)?.contentOrNull
         val message = (error?.get("message") as? JsonPrimitive)?.contentOrNull
         return when {
             status >= 500 -> DomainError.Server
@@ -89,7 +89,7 @@ class NetworkErrorMapper @Inject constructor(private val json: Json) {
         409 -> when (message) {
             "OBJECT_ALREADY_EXISTS" -> DomainError.AlreadyExists
             "VERSION_CONFLICT" -> DomainError.VersionConflict
-            else -> DomainError.Unexpected
+            else -> if (code == "23505") DomainError.AlreadyExists else DomainError.Unexpected
         }
         400, 422 -> validationError(code, message)
         else -> DomainError.Unexpected
@@ -99,7 +99,8 @@ class NetworkErrorMapper @Inject constructor(private val json: Json) {
             code == "PT401" && message == "AUTH_REQUIRED") DomainError.Unauthenticated
         else DomainError.Unexpected
     private fun validationError(code: String?, message: String?): DomainError =
-        if (code == "VALIDATION_ERROR" ||
+        if (code == "invalid_credentials") DomainError.InvalidCredentials
+        else if (code == "VALIDATION_ERROR" ||
             code == "PT422" && message in setOf("INVALID_BOUNDS", "INVALID_PAGINATION"))
             DomainError.Validation("request", "invalid_request")
         else DomainError.Unexpected
@@ -109,8 +110,15 @@ class RemoteCall @Inject constructor(
     private val config: NetworkConfig, private val connectivity: ConnectivityChecker,
     private val errors: NetworkErrorMapper,
 ) {
+    suspend fun <T : Any, R> execute(request: suspend () -> Response<T>, map: (T) -> R): DomainResult<R> =
+        execute(request, { null }, map)
+
     @Suppress("ReturnCount")
-    suspend fun <T : Any, R> execute(request: suspend () -> Response<T>, map: (T) -> R): DomainResult<R> {
+    suspend fun <T : Any, R> execute(
+        request: suspend () -> Response<T>,
+        classify: (Int) -> DomainError?,
+        map: (T) -> R,
+    ): DomainResult<R> {
         if (!config.ready) return DomainResult.Failure(DomainError.Unexpected)
         if (connectivity.isOffline()) return DomainResult.Failure(DomainError.Network)
         return try {
@@ -124,7 +132,9 @@ class RemoteCall @Inject constructor(
                     it.source().request(size)
                     it.source().buffer.clone().readUtf8(minOf(size, it.source().buffer.size))
                 }
-                DomainResult.Failure(errors.http(response.code(), body, response.headers()["Retry-After"]))
+                val error = classify(response.code())
+                    ?: errors.http(response.code(), body, response.headers()["Retry-After"])
+                DomainResult.Failure(error)
             }
         } catch (error: CancellationException) {
             throw error

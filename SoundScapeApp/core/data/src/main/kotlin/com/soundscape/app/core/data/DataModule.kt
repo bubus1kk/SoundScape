@@ -8,6 +8,9 @@ import com.soundscape.app.core.domain.repository.VisiblePlacesCache
 import com.soundscape.app.core.domain.repository.TrackSearchCache
 import com.soundscape.app.core.domain.repository.PlaylistReader
 import com.soundscape.app.core.domain.repository.PlaybackSourceResolver
+import com.soundscape.app.core.domain.repository.ProfileRepository
+import com.soundscape.app.core.domain.repository.ProfileSession
+import com.soundscape.app.core.network.AccessTokenProvider
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -22,4 +25,7 @@ abstract class DataModule {
     @Binds abstract fun trackCache(reader: OfflineFirstTrackSearcher): TrackSearchCache
     @Binds abstract fun playlistReader(reader: RemotePlaylistReader): PlaylistReader
     @Binds abstract fun playbackSourceResolver(resolver: RemotePlaybackSourceResolver): PlaybackSourceResolver
+    @Binds abstract fun profileRepository(repository: RemoteProfileRepository): ProfileRepository
+    @Binds abstract fun session(session: SupabaseProfileSession): ProfileSession
+    @Binds abstract fun tokens(session: SupabaseProfileSession): AccessTokenProvider
 }

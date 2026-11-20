@@ -4,6 +4,7 @@ package com.soundscape.app.core.network
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.util.Log
 import dagger.Module
 import dagger.Provides
@@ -13,6 +14,9 @@ import dagger.hilt.components.SingletonComponent
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -33,9 +37,12 @@ class ApiCredentialsInterceptor(
         val policy = RequestAuthPolicy.valueOf(checkNotNull(request.header("X-Soundscape-Auth")) {
             "Request authentication policy required"
         })
+        val requestCredential = request.tag(SessionCredential::class.java)
         val token = when (policy) {
             RequestAuthPolicy.Public -> null
-            RequestAuthPolicy.Authenticated -> checkNotNull(tokens.currentAccessToken()?.takeIf { it.isNotBlank() }) {
+            RequestAuthPolicy.Authenticated -> checkNotNull(
+                (requestCredential?.token ?: tokens.currentAccessToken())?.takeIf { it.isNotBlank() },
+            ) {
                 "Authentication required"
             }
             RequestAuthPolicy.OptionalUser -> tokens.currentAccessToken()
@@ -65,9 +72,18 @@ class SafeNetworkLoggingInterceptor(private val sink: (String) -> Unit) : Interc
 object NetworkModule {
     @Provides @Singleton fun json(): Json = Json { ignoreUnknownKeys = true }
     @Provides @Singleton fun connectivity(@ApplicationContext context: Context): ConnectivityChecker =
-        ConnectivityChecker {
-            val manager = context.getSystemService(ConnectivityManager::class.java)
-            manager.activeNetwork == null
+        object : ConnectivityChecker {
+            private val manager = context.getSystemService(ConnectivityManager::class.java)
+            override fun isOffline() = manager.activeNetwork == null
+            override fun observeOffline() = callbackFlow {
+                val listener = object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) { trySend(false) }
+                    override fun onLost(network: Network) { trySend(isOffline()) }
+                }
+                manager.registerDefaultNetworkCallback(listener)
+                trySend(isOffline())
+                awaitClose { manager.unregisterNetworkCallback(listener) }
+            }.distinctUntilChanged()
         }
     @Provides @Singleton fun client(config: NetworkConfig, tokens: AccessTokenProvider): OkHttpClient =
         OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
@@ -86,4 +102,6 @@ object NetworkModule {
     @Provides fun playlists(retrofit: Retrofit): PlaylistsApi = retrofit.create(PlaylistsApi::class.java)
     @Provides fun resolveTrack(retrofit: Retrofit): ResolveTrackApi = retrofit.create(ResolveTrackApi::class.java)
     @Provides fun media(retrofit: Retrofit): MediaApi = retrofit.create(MediaApi::class.java)
+    @Provides fun profiles(retrofit: Retrofit): ProfileApi = retrofit.create(ProfileApi::class.java)
+    @Provides fun sessions(retrofit: Retrofit): SessionApi = retrofit.create(SessionApi::class.java)
 }
