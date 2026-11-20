@@ -12,6 +12,10 @@ concurrency:
   group: soundscape-android-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  SOUNDSCAPE_SUPABASE_URL: ${{ vars.SOUNDSCAPE_SUPABASE_URL }}
+  SOUNDSCAPE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SOUNDSCAPE_SUPABASE_PUBLISHABLE_KEY }}  
+
 jobs:
   domain-jvm:
     runs-on: ubuntu-24.04

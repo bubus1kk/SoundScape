@@ -2,6 +2,7 @@ package com.soundscape.app
 
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -18,6 +19,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso.pressBack
@@ -32,6 +34,11 @@ import com.soundscape.app.presentation.home.HomeUiState
 import com.soundscape.app.presentation.profile.PersonalProfileActions
 import com.soundscape.app.presentation.profile.PersonalProfileScreen
 import com.soundscape.app.presentation.profile.ProfileLoad
+import com.soundscape.app.presentation.settings.SettingsActions
+import com.soundscape.app.presentation.settings.SettingsPage
+import com.soundscape.app.presentation.settings.SettingsScreen
+import com.soundscape.app.presentation.settings.SettingsUiState
+import com.soundscape.app.core.domain.model.UserSettings
 import com.soundscape.app.presentation.R as PresentationR
 import java.util.UUID
 import org.junit.Assert.assertTrue
@@ -42,6 +49,47 @@ class NavigationTest {
     @get:Rule val compose = createComposeRule()
     private var dispatch: ((HomeAction) -> Unit)? = null
     private fun text(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
+
+    @Test fun opensSettingsFromProfileAndReturnsThroughExistingBackStack() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            compose.onNodeWithContentDescription(text(PresentationR.string.home_profile)).performClick()
+            compose.onNodeWithContentDescription(text(PresentationR.string.profile_settings)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.settings_app)).assertIsDisplayed()
+            compose.onNodeWithText(text(PresentationR.string.nav_music)).assertDoesNotExist()
+            compose.onNodeWithText(text(PresentationR.string.settings_appearance)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.settings_palette)).assertIsDisplayed()
+            pressBack()
+            compose.onNodeWithText(text(PresentationR.string.settings_cache)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.settings_clear_cache)).assertIsNotEnabled()
+            pressBack()
+            compose.onNodeWithText(text(PresentationR.string.settings_device)).performClick()
+            compose.onNodeWithContentDescription(text(PresentationR.string.settings_notify_places)).assertIsNotEnabled()
+            pressBack()
+            pressBack()
+            compose.onNodeWithText(text(PresentationR.string.profile_mine)).assertIsDisplayed()
+        }
+    }
+
+    @Test fun appearanceCanChangeOfflineWithLargeTextOnNarrowScreen() {
+        val active = mutableStateOf(UserSettings())
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.7f)) {
+                SoundScapeTheme {
+                    Box(Modifier.size(300.dp, 480.dp)) {
+                        SettingsScreen(
+                            SettingsPage.Appearance, SettingsUiState(settings = active.value),
+                            SettingsActions({}, {}, {}, { active.value = active.value.copy(mode = it) }, {}, {}, {}),
+                            dynamicColorSupported = false, offline = true,
+                        )
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText(text(PresentationR.string.settings_offline)).assertIsDisplayed()
+        compose.onNodeWithText(text(PresentationR.string.settings_dark)).performScrollTo().performClick()
+        compose.onNodeWithText(text(PresentationR.string.settings_dark)).assertIsSelected()
+    }
 
     private fun setContent(): StateRestorationTester {
         val restoration = StateRestorationTester(compose)

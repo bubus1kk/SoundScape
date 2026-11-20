@@ -31,10 +31,11 @@ import com.soundscape.app.presentation.R
 import com.soundscape.app.presentation.home.HomeScreen
 import com.soundscape.app.presentation.home.HomeAction
 import com.soundscape.app.presentation.home.HomeViewModel
+import kotlinx.coroutines.flow.Flow
 
 @Composable
-fun SoundScapeNavHost(imageLoader: ImageLoader) {
-    SoundScapeNavHost(homeContent = { HomeRoute(it, imageLoader) }, imageLoader = imageLoader)
+fun SoundScapeNavHost(imageLoader: ImageLoader, offline: Flow<Boolean>? = null) {
+    SoundScapeNavHost(homeContent = { HomeRoute(it, imageLoader) }, imageLoader = imageLoader, offline = offline)
 }
 
 @Composable
@@ -42,6 +43,7 @@ internal fun SoundScapeNavHost(
     homeContent: @Composable ((HomeAction) -> Unit) -> Unit,
     imageLoader: ImageLoader? = null,
     personalContent: @Composable ((() -> Unit) -> Unit)? = null,
+    offline: Flow<Boolean>? = null,
 ) {
     val controller = rememberNavController()
     val entry by controller.currentBackStackEntryAsState()
@@ -51,7 +53,9 @@ internal fun SoundScapeNavHost(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             val route = entry?.destination?.route
-            if (route != ProfileNavigation.Edit && route != ProfileNavigation.SignIn) {
+            if (route != ProfileNavigation.Edit && route != ProfileNavigation.SignIn &&
+                route?.startsWith(SETTINGS_ROUTE_PREFIX) != true
+            ) {
                 val selected = if (route?.startsWith("profile") == true) AppDestination.Library.route else route
                 AppBottomBar(selected, personalProfile = route == ProfileNavigation.Own) { destination ->
                     controller.navigate(destination.route) {
@@ -74,6 +78,7 @@ internal fun SoundScapeNavHost(
                 controller.popBackStack(AppDestination.Music.route, false)
             } }
             installProfileRoutes(controller, imageLoader, personalContent)
+            installSettingsRoutes(controller, offline)
         }
     }
 }

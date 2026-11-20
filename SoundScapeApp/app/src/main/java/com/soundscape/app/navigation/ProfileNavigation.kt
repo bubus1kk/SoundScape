@@ -29,6 +29,7 @@ import com.soundscape.app.presentation.profile.ProfileSection
 import com.soundscape.app.presentation.profile.ProfileSignInScreen
 import com.soundscape.app.presentation.profile.ProfileViewModel
 import com.soundscape.app.presentation.profile.PublicProfileScreen
+import com.soundscape.app.presentation.settings.SettingsPage
 import java.util.UUID
 
 internal object ProfileNavigation {
@@ -71,7 +72,7 @@ internal fun NavGraphBuilder.installProfileRoutes(
             }
             PersonalProfileScreen(state, PersonalProfileActions(
                 back = back,
-                settings = { controller.openProfileRoute(ProfileNavigation.section("settings")) },
+                settings = { controller.openProfileRoute(SettingsPage.Overview.route) },
                 edit = { controller.openProfileRoute(ProfileNavigation.Edit) },
                 publicView = { controller.openProfileRoute(ProfileNavigation.public(it)) },
                 openSection = { controller.openProfileSection(it) },

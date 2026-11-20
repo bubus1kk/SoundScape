@@ -3,6 +3,15 @@ package com.soundscape.app.core.designsystem.ui.theme
 import androidx.compose.ui.graphics.Color
 
 object SoundScapePalettes {
+    fun previewSwatches(preset: SoundScapePreset): List<Color> {
+        val (accent, soft) = when (preset) {
+            SoundScapePreset.Atlas -> AtlasLight.primary to AtlasLight.primarySoft
+            SoundScapePreset.Aurora -> Color(0xFF458D96) to Color(0xFFDDEFEF)
+            SoundScapePreset.Violet -> Color(0xFF7655AA) to Color(0xFFEBE2F4)
+        }
+        return listOf(accent, soft, AtlasLight.background, AtlasLight.surface)
+    }
+
     val AtlasLight = SoundScapeColors(
         background = Color(0xFFF5F7FC),
         surface = Color(0xFFFFFFFF),

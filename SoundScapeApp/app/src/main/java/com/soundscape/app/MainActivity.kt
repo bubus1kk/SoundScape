@@ -16,6 +16,7 @@ import com.soundscape.app.navigation.SoundScapeNavHost
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import coil3.ImageLoader
 import com.soundscape.app.core.domain.repository.ProfileSession
+import com.soundscape.app.core.network.ConnectivityChecker
 import com.soundscape.app.media.EditorialMediaImages
 import com.soundscape.app.presentation.settings.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -28,6 +29,7 @@ private const val LIGHT_BACKGROUND_THRESHOLD = 0.5f
 class MainActivity : ComponentActivity() {
     @Inject @EditorialMediaImages lateinit var imageLoader: ImageLoader
     @Inject lateinit var profileSession: ProfileSession
+    @Inject lateinit var connectivity: ConnectivityChecker
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -35,6 +37,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         lifecycleScope.launch { profileSession.restore() }
         val settingsModel = ViewModelProvider(this)[SettingsViewModel::class.java]
+        val offline = connectivity.observeOffline()
         var initialReadPending = true
         splash.setKeepOnScreenCondition {
             if (!settingsModel.state.value.initialLoading) initialReadPending = false
@@ -52,7 +55,7 @@ class MainActivity : ComponentActivity() {
                             isAppearanceLightNavigationBars = lightBars
                         }
                     }
-                    SoundScapeNavHost(imageLoader = imageLoader)
+                    SoundScapeNavHost(imageLoader = imageLoader, offline = offline)
                 }
             }
         }
