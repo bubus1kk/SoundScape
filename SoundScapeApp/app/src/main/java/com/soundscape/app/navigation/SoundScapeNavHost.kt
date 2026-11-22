@@ -24,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
+import com.soundscape.app.BuildConfig
 import com.soundscape.app.core.designsystem.ui.components.SoundScapeButton
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 import com.soundscape.app.media.CityPhoto
@@ -31,11 +32,18 @@ import com.soundscape.app.presentation.R
 import com.soundscape.app.presentation.home.HomeScreen
 import com.soundscape.app.presentation.home.HomeAction
 import com.soundscape.app.presentation.home.HomeViewModel
+import com.soundscape.app.presentation.map.MapScreen
+import com.soundscape.app.presentation.map.MapViewModel
 import kotlinx.coroutines.flow.Flow
 
 @Composable
 fun SoundScapeNavHost(imageLoader: ImageLoader, offline: Flow<Boolean>? = null) {
-    SoundScapeNavHost(homeContent = { HomeRoute(it, imageLoader) }, imageLoader = imageLoader, offline = offline)
+    SoundScapeNavHost(
+        homeContent = { HomeRoute(it, imageLoader) },
+        imageLoader = imageLoader,
+        offline = offline,
+        mapTilerKey = BuildConfig.MAPTILER_API_KEY,
+    )
 }
 
 @Composable
@@ -44,6 +52,7 @@ internal fun SoundScapeNavHost(
     imageLoader: ImageLoader? = null,
     personalContent: @Composable ((() -> Unit) -> Unit)? = null,
     offline: Flow<Boolean>? = null,
+    mapTilerKey: String = "",
 ) {
     val controller = rememberNavController()
     val entry by controller.currentBackStackEntryAsState()
@@ -71,9 +80,11 @@ internal fun SoundScapeNavHost(
             composable(AppDestination.Music.route) {
                 HomeWithNotices(snackbar, homeContent) { controller.openProfileRoute(ProfileNavigation.Own) }
             }
-            composable(AppDestination.Map.route) { PendingScreen(stringResource(R.string.nav_map)) {
-                controller.popBackStack(AppDestination.Music.route, false)
-            } }
+            composable(AppDestination.Map.route) {
+                val model = if (mapTilerKey.isBlank()) null else hiltViewModel<MapViewModel>()
+                val isOffline = offline?.collectAsStateWithLifecycle(initialValue = false)?.value ?: false
+                MapScreen(mapTilerKey, model, isOffline) { controller.openProfileRoute(ProfileNavigation.Own) }
+            }
             composable(AppDestination.Library.route) { PendingScreen(stringResource(R.string.nav_library)) {
                 controller.popBackStack(AppDestination.Music.route, false)
             } }

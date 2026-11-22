@@ -24,6 +24,9 @@ detekt {
 }
 
 dependencies {
+    implementation(libs.maplibre.opengl)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.okhttp)
     implementation(project(":core:designsystem"))
     testImplementation(libs.kotlinx.coroutines.test)
     implementation(project(":core:domain"))

@@ -1,5 +1,13 @@
 package com.soundscape.app
 
+import android.view.View
+import android.view.ViewGroup
+import android.graphics.PointF
+import android.graphics.RectF
+import android.os.SystemClock
+import android.util.Log
+import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
@@ -7,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -14,6 +23,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasText
@@ -42,8 +53,16 @@ import com.soundscape.app.core.domain.model.UserSettings
 import com.soundscape.app.presentation.R as PresentationR
 import java.util.UUID
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotSame
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.geojson.Point
+import kotlin.math.abs
 
 class NavigationTest {
     @get:Rule val compose = createComposeRule()
@@ -111,7 +130,9 @@ class NavigationTest {
         val restoration = setContent()
         compose.onNodeWithTag("home-feed").performScrollToNode(hasText("Свой плейлист с ИИ"))
         compose.onNodeWithText("Карта").performClick()
-        compose.onNodeWithText(text(PresentationR.string.home_pending)).assertExists()
+        compose.onNodeWithText(text(PresentationR.string.map_title)).assertIsDisplayed()
+        compose.onNodeWithText(text(PresentationR.string.map_config_missing)).assertIsDisplayed()
+        compose.onNodeWithText("Карта").assertIsSelected()
         compose.onNodeWithText("Музыка").performClick()
         compose.onNodeWithText("Свой плейлист с ИИ").assertIsDisplayed()
         compose.onNodeWithText("Моя медиатека").performClick()
@@ -120,6 +141,7 @@ class NavigationTest {
         pressBack()
         compose.onNodeWithTag("home-feed").assertExists()
         compose.onNodeWithText("Карта").performClick()
+        compose.onNodeWithText(text(PresentationR.string.map_config_missing)).assertIsDisplayed()
         compose.onNodeWithText("Музыка").performClick()
         compose.onNodeWithTag("home-feed").assertExists()
     }
@@ -138,6 +160,220 @@ class NavigationTest {
         compose.onNodeWithText("Карта").performClick()
         pressBack()
         compose.onNodeWithTag("home-feed").assertExists()
+    }
+
+    @Test fun mapViewIsRecreatedAndReleasedWhenLeavingTabOrRecreatingActivity() {
+        assumeTrue(BuildConfig.MAPTILER_API_KEY.isNotBlank())
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            compose.onNodeWithText(text(PresentationR.string.nav_map)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.map_title)).assertIsDisplayed()
+            val original = activeMap(scenario)
+            compose.onNodeWithText(text(PresentationR.string.nav_music)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.nav_music)).assertIsSelected()
+            compose.mainClock.advanceTimeBy(1_000)
+            compose.waitForIdle()
+            compose.waitUntil(timeoutMillis = 30_000) { compose.runOnUiThread { original.isDestroyed } }
+            compose.onNodeWithText(text(PresentationR.string.nav_map)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.map_title)).assertIsDisplayed()
+            val restored = activeMap(scenario)
+            assertNotSame(original, restored)
+            scenario.recreate()
+            compose.onNodeWithText(text(PresentationR.string.map_title)).assertIsDisplayed()
+            assertNotSame(restored, activeMap(scenario))
+            assertTrue(compose.runOnUiThread { restored.isDestroyed })
+        }
+    }
+
+    @Test fun realClusterZoomsAndPublishedCityOpensItsCard() {
+        assumeTrue(BuildConfig.MAPTILER_API_KEY.isNotBlank())
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            compose.onNodeWithText(text(PresentationR.string.nav_map)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.map_title)).assertIsDisplayed()
+            val view = activeMap(scenario)
+            var ready: MapLibreMap? = null
+            compose.runOnUiThread { view.getMapAsync { ready = it } }
+            compose.waitUntil(timeoutMillis = 30_000) { compose.runOnUiThread { ready?.style?.isFullyLoaded == true } }
+            val map = requireNotNull(ready)
+            val paris = LatLng(48.8566, 2.3522)
+            compose.runOnUiThread { map.moveCamera(CameraUpdateFactory.newLatLngZoom(paris, 2.0)) }
+            val center = RectF(0f, 0f, view.width.toFloat(), view.height.toFloat())
+            fun clusterPoint() = map.queryRenderedFeatures(center, "soundscape-clusters")
+                .firstOrNull()?.geometry() as? Point
+            compose.waitUntil(timeoutMillis = 45_000) { compose.runOnUiThread { clusterPoint() != null } }
+            compose.runOnUiThread {
+                val cluster = requireNotNull(clusterPoint())
+                tapMap(view, map.projection.toScreenLocation(LatLng(cluster.latitude(), cluster.longitude())))
+            }
+            compose.waitUntil(timeoutMillis = 10_000) { compose.runOnUiThread { map.cameraPosition.zoom > 2.0 } }
+            compose.runOnUiThread { map.moveCamera(CameraUpdateFactory.newLatLngZoom(paris, 5.0)) }
+            compose.waitUntil(timeoutMillis = 30_000) {
+                compose.runOnUiThread {
+                    map.queryRenderedFeatures(map.projection.toScreenLocation(paris), "soundscape-places").isNotEmpty()
+                }
+            }
+            compose.runOnUiThread { tapMap(view, map.projection.toScreenLocation(paris)) }
+            val cityKind = text(PresentationR.string.map_card_city)
+            compose.waitUntil(timeoutMillis = 10_000) {
+                compose.onAllNodes(hasText(cityKind)).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("Париж").assertIsDisplayed()
+            pressBack()
+            compose.onNodeWithText(cityKind).assertDoesNotExist()
+            compose.onNodeWithText(text(PresentationR.string.map_title)).assertIsDisplayed()
+        }
+    }
+
+    @Test fun ss09ButtonsChangeZoomAndTheNativeMapStillReceivesGestures() = withOpenMap { view, map ->
+        fun zoom() = compose.runOnUiThread { map.cameraPosition.zoom }
+        fun awaitZoom(value: Double) = compose.waitUntil(15_000) { abs(zoom() - value) < 0.01 }
+        val increase = compose.onNodeWithContentDescription(text(PresentationR.string.map_zoom_increase))
+        val decrease = compose.onNodeWithContentDescription(text(PresentationR.string.map_zoom_decrease))
+        val initial = zoom()
+        increase.performClick()
+        awaitZoom(initial + 1)
+        val increased = zoom()
+        decrease.performClick()
+        awaitZoom(initial)
+        Log.i("SS09Verification", "camera.zoom buttons: $initial -> $increased -> ${zoom()}")
+        compose.runOnUiThread { map.moveCamera(CameraUpdateFactory.zoomTo(map.maxZoomLevel)) }
+        awaitZoom(compose.runOnUiThread { map.maxZoomLevel })
+        increase.assertIsNotEnabled()
+        compose.runOnUiThread { map.moveCamera(CameraUpdateFactory.zoomTo(map.minZoomLevel)) }
+        awaitZoom(compose.runOnUiThread { map.minZoomLevel })
+        decrease.assertIsNotEnabled()
+        compose.runOnUiThread { map.moveCamera(CameraUpdateFactory.zoomTo(initial)) }
+        awaitZoom(initial)
+
+        val canvas = compose.onNodeWithTag("ss09-map")
+        canvas.performTouchInput { doubleClick(center) }
+        awaitZoom(initial + 1)
+        val doubleTapZoom = zoom()
+        assertTrue(compose.runOnUiThread { map.uiSettings.isZoomGesturesEnabled })
+        SystemClock.sleep(400)
+        val center = mapCenter(view)
+        val near = Offset(view.width * 0.10f, 0f)
+        val far = Offset(view.width * 0.40f, 0f)
+        var multitouchMoves = 0
+        compose.runOnUiThread {
+            view.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_MOVE && event.pointerCount == 2) multitouchMoves++
+                false
+            }
+        }
+        moveTouch(listOf(center - near, center + near), listOf(center - far, center + far))
+        try {
+            compose.waitUntil(15_000) { zoom() > doubleTapZoom + 0.1 }
+        } finally {
+            Log.i("SS09Verification", "pinch pointer moves=${compose.runOnUiThread { multitouchMoves }}, zoom=${zoom()}")
+            compose.runOnUiThread { view.setOnTouchListener(null) }
+        }
+        Log.i("SS09Verification", "camera.zoom gestures: $initial -> $doubleTapZoom -> ${zoom()}")
+    }
+
+    @Test fun ss09LayersAndFiltersOpenIndependentlyAndPanningHasNoRefreshBanner() = withOpenMap { view, map ->
+        compose.onNodeWithContentDescription(text(PresentationR.string.map_filters)).performClick()
+        compose.onNodeWithText(text(PresentationR.string.map_filters_unavailable)).assertIsDisplayed()
+        compose.onNodeWithText(text(PresentationR.string.map_layers)).assertDoesNotExist()
+        pressBack()
+        compose.onNodeWithText(text(PresentationR.string.map_filters_unavailable)).assertDoesNotExist()
+        compose.onNodeWithText(text(PresentationR.string.map_layer_public)).performClick()
+        compose.onNodeWithText(text(PresentationR.string.map_layers)).assertIsDisplayed()
+        compose.onNodeWithText(text(PresentationR.string.map_layer_cities)).performClick()
+        compose.onNodeWithText(text(PresentationR.string.map_panel_done)).performClick()
+        compose.onNodeWithText(text(PresentationR.string.map_layer_cities)).assertIsDisplayed()
+        repeat(3) {
+            val before = compose.runOnUiThread { requireNotNull(map.cameraPosition.target).longitude }
+            val center = mapCenter(view)
+            moveTouch(listOf(center), listOf(center + Offset(145f, 90f)))
+            compose.waitUntil(10_000) {
+                abs(compose.runOnUiThread { requireNotNull(map.cameraPosition.target).longitude } - before) > 0.01
+            }
+            compose.onNodeWithText("Обновляем музыкальные места…").assertDoesNotExist()
+        }
+        compose.onNodeWithText(text(PresentationR.string.nav_map)).assertIsSelected()
+    }
+
+    private fun mapCenter(view: MapView): Offset = compose.runOnUiThread {
+        val screen = IntArray(2)
+        view.getLocationOnScreen(screen)
+        Offset(screen[0] + view.width / 2f, screen[1] + view.height / 2f)
+    }
+
+    private fun moveTouch(start: List<Offset>, end: List<Offset>) {
+        val input = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val downTime = SystemClock.uptimeMillis()
+        fun send(action: Int, points: List<Offset>) {
+            val pointers = Array(points.size) { index ->
+                MotionEvent.PointerProperties().apply { id = index; toolType = MotionEvent.TOOL_TYPE_FINGER }
+            }
+            val coords = Array(points.size) { index ->
+                MotionEvent.PointerCoords().apply {
+                    x = points[index].x
+                    y = points[index].y
+                    pressure = 1f
+                    size = 1f
+                }
+            }
+            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, points.size,
+                pointers, coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+            try {
+                assertTrue(input.injectInputEvent(event, false))
+            } finally {
+                event.recycle()
+            }
+        }
+
+        send(MotionEvent.ACTION_DOWN, start.take(1))
+        if (start.size == 2) send(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), start)
+        val steps = 16
+        for (step in 1..steps) {
+            SystemClock.sleep(16)
+            val progress = step.toFloat() / steps
+            send(MotionEvent.ACTION_MOVE, start.zip(end) { from, to -> from + (to - from) * progress })
+        }
+        if (start.size == 2) send(MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), end)
+        send(MotionEvent.ACTION_UP, end.take(1))
+    }
+
+    private fun withOpenMap(test: (MapView, MapLibreMap) -> Unit) {
+        assumeTrue(BuildConfig.MAPTILER_API_KEY.isNotBlank())
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            compose.onNodeWithText(text(PresentationR.string.nav_map)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.map_title)).assertIsDisplayed()
+            val view = activeMap(scenario)
+            var ready: MapLibreMap? = null
+            compose.runOnUiThread { view.getMapAsync { ready = it } }
+            compose.waitUntil(45_000) { compose.runOnUiThread { ready?.style?.isFullyLoaded == true } }
+            test(view, requireNotNull(ready))
+        }
+    }
+
+    private fun tapMap(view: MapView, position: PointF) {
+        val now = SystemClock.uptimeMillis()
+        for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+            val event = MotionEvent.obtain(now, now, action, position.x, position.y, 0)
+            try {
+                view.dispatchTouchEvent(event)
+            } finally {
+                event.recycle()
+            }
+        }
+    }
+
+    private fun activeMap(scenario: ActivityScenario<MainActivity>): MapView {
+        var map: MapView? = null
+        scenario.onActivity { map = findMap(it.window.decorView) }
+        return requireNotNull(map)
+    }
+
+    private fun findMap(view: View): MapView? {
+        if (view is MapView) return view
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                findMap(view.getChildAt(index))?.let { return it }
+            }
+        }
+        return null
     }
 
     @Test fun profileActionOpensProfileAndBackRestoresHome() {

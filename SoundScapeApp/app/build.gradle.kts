@@ -12,6 +12,8 @@ val supabaseUrl = providers.gradleProperty("soundscape.supabaseUrl")
     .orElse(providers.environmentVariable("SOUNDSCAPE_SUPABASE_URL")).orElse("")
 val supabasePublishableKey = providers.gradleProperty("soundscape.supabasePublishableKey")
     .orElse(providers.environmentVariable("SOUNDSCAPE_SUPABASE_PUBLISHABLE_KEY")).orElse("")
+val mapTilerApiKey = providers.gradleProperty("soundscape.maptilerApiKey")
+    .orElse(providers.environmentVariable("SOUNDSCAPE_MAPTILER_API_KEY")).orElse("")
 
 val verifyDebugSupabaseConfiguration = tasks.register("verifyDebugSupabaseConfiguration") {
     group = "verification"
@@ -52,6 +54,7 @@ android {
         fun quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
         buildConfigField("String", "SUPABASE_URL", quoted(supabaseUrl.get()))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", quoted(supabasePublishableKey.get()))
+        buildConfigField("String", "MAPTILER_API_KEY", quoted(mapTilerApiKey.get()))
         versionCode = 1
         versionName = "1.0"
 
@@ -120,6 +123,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.maplibre.opengl)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
