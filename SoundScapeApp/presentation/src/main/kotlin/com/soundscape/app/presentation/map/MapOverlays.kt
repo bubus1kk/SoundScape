@@ -47,7 +47,8 @@ import com.soundscape.app.core.domain.model.MapPlaceKind
 import com.soundscape.app.presentation.R
 
 @Composable
-internal fun BoxScope.MapControls(citiesOnly: Boolean, zoom: MapZoomControls, open: (MapPanel) -> Unit) {
+internal fun BoxScope.MapControls(citiesOnly: Boolean, zoom: MapZoomControls,
+                                  onRandom: (() -> Unit)?, open: (MapPanel) -> Unit) {
     val spacing = SoundScapeTheme.spacing
     val colors = SoundScapeTheme.colors
     Surface(
@@ -77,7 +78,7 @@ internal fun BoxScope.MapControls(citiesOnly: Boolean, zoom: MapZoomControls, op
         MapTool(R.drawable.ic_sliders_horizontal, R.string.map_filters) { open(MapPanel.Filters) }
         MapTool(R.drawable.ic_globe, R.string.map_globe_unavailable, enabled = false) {}
         MapTool(R.drawable.ic_locate_fixed, R.string.map_nearby_unavailable, enabled = false) {}
-        MapTool(R.drawable.ic_dice_5, R.string.map_random_unavailable, enabled = false) {}
+        MapTool(R.drawable.ic_dice_5, R.string.map_random, enabled = onRandom != null) { onRandom?.invoke() }
     }
     Column(
         Modifier.align(Alignment.BottomEnd).padding(spacing.space16),

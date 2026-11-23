@@ -31,6 +31,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso.pressBack
@@ -223,6 +224,52 @@ class NavigationTest {
         }
     }
 
+    @Test fun ss09RandomPlaceFliesFromWorldViewAndOpensFocusedMarkerCard() = withOpenMap { _, map ->
+        compose.runOnUiThread { map.moveCamera(CameraUpdateFactory.zoomTo(map.minZoomLevel)) }
+        val start = compose.runOnUiThread { map.cameraPosition.zoom }
+        val button = compose.onNodeWithContentDescription(text(PresentationR.string.map_random))
+        compose.waitUntil(30_000) { runCatching { button.assertIsEnabled() }.isSuccess }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasText(text(PresentationR.string.map_zoom_in))).fetchSemanticsNodes().isNotEmpty()
+        }
+        button.performClick()
+        val card = hasText(text(PresentationR.string.map_card_city)) or hasText(text(PresentationR.string.map_card_pin))
+        compose.waitUntil(30_000) { compose.onAllNodes(card).fetchSemanticsNodes().isNotEmpty() }
+        val opened = compose.runOnUiThread {
+            val finish = map.cameraPosition
+            val center = requireNotNull(finish.target)
+            val pin = map.queryRenderedFeatures(map.projection.toScreenLocation(center), "soundscape-focused-place-pin")
+            assertTrue(pin.isNotEmpty())
+            assertTrue(finish.zoom > start)
+            requireNotNull(pin.first().id())
+        }
+        val firstCenter = compose.runOnUiThread { map.cameraPosition.target }
+        val firstZoom = compose.runOnUiThread { map.cameraPosition.zoom }
+        var overviewZoom = firstZoom
+        val observeZoom = MapLibreMap.OnCameraMoveListener {
+            overviewZoom = minOf(overviewZoom, map.cameraPosition.zoom)
+        }
+        pressBack()
+        compose.onNode(card).assertDoesNotExist()
+        button.assertIsEnabled()
+        compose.runOnUiThread { map.addOnCameraMoveListener(observeZoom) }
+        try {
+            button.performClick()
+            compose.waitUntil(30_000) { compose.onAllNodes(card).fetchSemanticsNodes().isNotEmpty() }
+            compose.runOnUiThread {
+                val finish = map.cameraPosition
+                val center = requireNotNull(finish.target)
+                val pin = map.queryRenderedFeatures(map.projection.toScreenLocation(center), "soundscape-focused-place-pin")
+                assertTrue(opened != requireNotNull(pin.firstOrNull()?.id()))
+                assertTrue(overviewZoom < firstZoom - 1.0)
+                assertTrue(abs(firstZoom - finish.zoom) < 0.01)
+                Log.i("SS09Verification", "random flight $firstCenter -> $center, zoom $firstZoom -> $overviewZoom -> ${finish.zoom}")
+            }
+        } finally {
+            compose.runOnUiThread { map.removeOnCameraMoveListener(observeZoom) }
+        }
+    }
+
     @Test fun ss09ButtonsChangeZoomAndTheNativeMapStillReceivesGestures() = withOpenMap { view, map ->
         fun zoom() = compose.runOnUiThread { map.cameraPosition.zoom }
         fun awaitZoom(value: Double) = compose.waitUntil(15_000) { abs(zoom() - value) < 0.01 }
@@ -245,7 +292,7 @@ class NavigationTest {
         awaitZoom(initial)
 
         val canvas = compose.onNodeWithTag("ss09-map")
-        canvas.performTouchInput { doubleClick(center) }
+        canvas.performTouchInput { doubleClick(Offset(center.x / 2, center.y / 2)) }
         awaitZoom(initial + 1)
         val doubleTapZoom = zoom()
         assertTrue(compose.runOnUiThread { map.uiSettings.isZoomGesturesEnabled })
@@ -274,7 +321,7 @@ class NavigationTest {
         compose.onNodeWithContentDescription(text(PresentationR.string.map_filters)).performClick()
         compose.onNodeWithText(text(PresentationR.string.map_filters_unavailable)).assertIsDisplayed()
         compose.onNodeWithText(text(PresentationR.string.map_layers)).assertDoesNotExist()
-        pressBack()
+        compose.onNodeWithContentDescription(text(PresentationR.string.map_card_close)).performClick()
         compose.onNodeWithText(text(PresentationR.string.map_filters_unavailable)).assertDoesNotExist()
         compose.onNodeWithText(text(PresentationR.string.map_layer_public)).performClick()
         compose.onNodeWithText(text(PresentationR.string.map_layers)).assertIsDisplayed()

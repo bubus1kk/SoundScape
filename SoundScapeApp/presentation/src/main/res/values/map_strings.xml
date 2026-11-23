@@ -19,7 +19,9 @@
     <string name="map_panel_done">Готово</string>
     <string name="map_globe_unavailable">Глобус недоступен</string>
     <string name="map_nearby_unavailable">Поиск мест рядом недоступен</string>
-    <string name="map_random_unavailable">Случайное место недоступно</string>
+    <string name="map_random">Случайное место</string>
+    <string name="map_random_empty">Нет доступных мест для случайного выбора.</string>
+    <string name="map_random_failed">Не удалось загрузить места. Проверьте подключение и попробуйте ещё раз.</string>
     <string name="map_zoom_increase">Увеличить масштаб</string>
     <string name="map_zoom_decrease">Уменьшить масштаб</string>
     <string name="map_zoom_in">Приблизьте карту, чтобы увидеть места.</string>

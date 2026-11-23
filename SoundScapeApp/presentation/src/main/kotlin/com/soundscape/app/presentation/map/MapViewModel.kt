@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.soundscape.app.core.domain.model.DomainError
 import com.soundscape.app.core.domain.model.DomainResult
 import com.soundscape.app.core.domain.model.GeoBounds
+import com.soundscape.app.core.domain.model.GeoPoint
 import com.soundscape.app.core.domain.model.MapPlace
+import com.soundscape.app.core.domain.model.MapPlaceKind
 import com.soundscape.app.core.domain.model.PageRequest
 import com.soundscape.app.core.domain.usecase.GetVisiblePlacesUseCase
 import com.soundscape.app.core.domain.usecase.ObserveVisiblePlacesUseCase
@@ -22,6 +24,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 internal enum class MapPlacesLoad { Idle, Initial, Background, Retry }
+
+internal sealed interface RandomPlace {
+    val busy: Boolean get() = this == Loading || this is Flight
+
+    data object Idle : RandomPlace
+    data object Loading : RandomPlace
+    data object Empty : RandomPlace
+    data object Failed : RandomPlace
+    data class Flight(val place: MapPlace) : RandomPlace
+}
 
 internal data class MapPlacesState(
     val places: List<MapPlace> = emptyList(),
@@ -43,6 +55,12 @@ class MapViewModel @Inject constructor(
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(MapPlacesState())
     internal val state = mutableState.asStateFlow()
+    private val random = MutableStateFlow<RandomPlace>(RandomPlace.Idle)
+    internal val randomPlace = random.asStateFlow()
+    private var fallback: List<MapPlace>? = null
+    private var recentCandidates: List<MapPlace> = emptyList()
+    private var lastRandomId: UUID? = null
+    private var randomJob: Job? = null
     private var bounds: GeoBounds? = null
     private var completed: GeoBounds? = null
     private var loadingJob: Job? = null
@@ -73,8 +91,59 @@ class MapViewModel @Inject constructor(
     }
 
     fun select(id: UUID?) {
+        if (id != null) cancelRandom()
         val current = mutableState.value
         mutableState.value = current.copy(selected = current.places.firstOrNull { it.id == id })
+    }
+
+    internal fun chooseRandomPlace(citiesOnly: Boolean) {
+        if (random.value.busy) return
+        recentCandidates = (mutableState.value.places + recentCandidates)
+            .distinctBy(MapPlace::id).take(MAX_PAGES * PAGE_SIZE)
+        val available = recentCandidates.forLayer(citiesOnly).filterNot { it.id == lastRandomId }
+        if (available.isNotEmpty()) {
+            offerRandomPlace(available)
+        } else {
+            random.value = RandomPlace.Loading
+            randomJob = viewModelScope.launch {
+                val cached = fallback
+                if (cached != null) {
+                    offerRandomPlace(cached.forLayer(citiesOnly))
+                } else {
+                    when (val result = getPlaces(RANDOM_BOUNDS, PageRequest(PAGE_SIZE, 0))) {
+                        is DomainResult.Success -> {
+                            fallback = result.value.items
+                            offerRandomPlace(result.value.items.forLayer(citiesOnly))
+                        }
+                        is DomainResult.Failure -> random.value = RandomPlace.Failed
+                    }
+                }
+            }
+        }
+    }
+
+    internal fun cancelRandom() {
+        randomJob?.cancel()
+        randomJob = null
+        random.value = RandomPlace.Idle
+    }
+
+    internal fun finishRandomFlight(flight: RandomPlace.Flight, arrived: Boolean) {
+        if (random.value !== flight) return
+        if (arrived) {
+            lastRandomId = flight.place.id
+            mutableState.value = mutableState.value.copy(selected = flight.place)
+        }
+        random.value = RandomPlace.Idle
+    }
+
+    internal fun dismissRandomNotice() {
+        if (random.value == RandomPlace.Empty || random.value == RandomPlace.Failed) random.value = RandomPlace.Idle
+    }
+
+    private fun offerRandomPlace(candidates: List<MapPlace>) {
+        val chosen = candidates.filterNot { it.id == lastRandomId }.randomOrNull()
+        random.value = if (chosen == null) RandomPlace.Empty else RandomPlace.Flight(chosen)
     }
 
     private fun request(area: GeoBounds, load: MapPlacesLoad) {
@@ -124,9 +193,8 @@ class MapViewModel @Inject constructor(
         partial: Boolean = false,
     ) {
         val current = mutableState.value
-        val selected = current.selected?.id
         mutableState.value = current.copy(
-            places = places, selected = places.firstOrNull { it.id == selected },
+            places = places, selected = places.firstOrNull { it.id == current.selected?.id } ?: current.selected,
             load = load, error = error, loaded = current.loaded || load == MapPlacesLoad.Idle, partial = partial,
         )
     }
@@ -135,5 +203,12 @@ class MapViewModel @Inject constructor(
         const val PAGE_SIZE = 100
         const val MAX_PAGES = 3
         const val DEBOUNCE_MS = 300L
+        val RANDOM_BOUNDS = (GeoBounds.create(
+            (GeoPoint.create(-90.0, -180.0) as DomainResult.Success).value,
+            (GeoPoint.create(90.0, 180.0) as DomainResult.Success).value,
+        ) as DomainResult.Success).value
     }
 }
+
+private fun List<MapPlace>.forLayer(citiesOnly: Boolean): List<MapPlace> =
+    if (citiesOnly) filter { it.kind == MapPlaceKind.CITY } else this

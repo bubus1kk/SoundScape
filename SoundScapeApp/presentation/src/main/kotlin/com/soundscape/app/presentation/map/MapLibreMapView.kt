@@ -20,12 +20,18 @@ import com.soundscape.app.core.domain.model.GeoBounds
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 import com.soundscape.app.core.domain.model.MapPlace
 import java.util.UUID
+import kotlin.coroutines.resume
 import kotlin.math.pow
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdate
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.log.Logger
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
@@ -38,7 +44,7 @@ internal fun MapLibreMapView(
     initialState: Bundle?,
     callbacks: NativeMapCallbacks,
     places: List<MapPlace>,
-    selected: UUID?,
+    selected: MapPlace?,
     markerColor: Int,
     zoom: MapZoomControls,
     modifier: Modifier = Modifier,
@@ -78,6 +84,8 @@ internal class MapZoomControls {
         private set
     var canZoomOut by mutableStateOf(false)
         private set
+    var isFlightOverview = false
+        private set
 
     fun attach(current: MapLibreMap) {
         map?.let(::detach)
@@ -102,6 +110,28 @@ internal class MapZoomControls {
         if (target != start) current.animateCamera(CameraUpdateFactory.zoomTo(target), ZOOM_DURATION_MS)
     }
 
+    suspend fun flyTo(place: MapPlace): Boolean {
+        val current = map ?: return false
+        val start = current.cameraPosition
+        val center = LatLng(place.coordinates.latitude, place.coordinates.longitude)
+        val zoom = start.zoom.coerceAtLeast(PLACE_ZOOM)
+            .coerceIn(current.minZoomLevel, current.maxZoomLevel)
+        val overview = current.flightOverviewZoom(start, center)
+        return try {
+            isFlightOverview = true
+            val pulledBack = overview >= start.zoom ||
+                current.animateFlightStep(CameraUpdateFactory.zoomTo(overview), FLIGHT_ZOOM_OUT_MS)
+            val relocated = pulledBack && map === current && (start.target == center ||
+                current.animateFlightStep(CameraUpdateFactory.newLatLngZoom(center, overview), FLIGHT_PAN_MS))
+            isFlightOverview = false
+            relocated && map === current &&
+                current.animateFlightStep(CameraUpdateFactory.newLatLngZoom(center, zoom), FLIGHT_ZOOM_IN_MS)
+        } finally {
+            isFlightOverview = false
+            if (!currentCoroutineContext().isActive && map === current) current.cancelTransitions()
+        }
+    }
+
     private fun update() {
         val current = map
         canZoomIn = current != null && current.cameraPosition.zoom < current.maxZoomLevel - ZOOM_EPSILON
@@ -111,8 +141,35 @@ internal class MapZoomControls {
     private companion object {
         const val ZOOM_DURATION_MS = 250
         const val ZOOM_EPSILON = 0.0001
+        const val PLACE_ZOOM = 12.0
+        const val FLIGHT_ZOOM_OUT_MS = 400
+        const val FLIGHT_PAN_MS = 600
+        const val FLIGHT_ZOOM_IN_MS = 550
     }
 }
+
+private fun MapLibreMap.flightOverviewZoom(start: CameraPosition, destination: LatLng): Double {
+    val origin = start.target
+    val fitZoom = if (origin != null && origin != destination) {
+        val bounds = LatLngBounds.Builder().include(origin).include(destination).build()
+        getCameraForLatLngBounds(bounds)?.zoom?.minus(1.0)
+    } else null
+    val pullBack = start.zoom - 2.0
+    return minOf(pullBack, fitZoom ?: pullBack).coerceIn(minZoomLevel, maxZoomLevel)
+}
+
+private suspend fun MapLibreMap.animateFlightStep(update: CameraUpdate, duration: Int): Boolean =
+    suspendCancellableCoroutine { continuation ->
+        animateCamera(update, duration, object : MapLibreMap.CancelableCallback {
+            override fun onFinish() {
+                if (continuation.isActive) continuation.resume(true)
+            }
+
+            override fun onCancel() {
+                if (continuation.isActive) continuation.resume(false)
+            }
+        })
+    }
 
 internal data class NativeMapCallbacks(
     val saveState: (Bundle) -> Unit,
@@ -166,7 +223,7 @@ private class MapViewLifecycle(
     private var map: MapLibreMap? = null
     private var markers: MapMarkers? = null
     private var places: List<MapPlace> = emptyList()
-    private var selected: UUID? = null
+    private var selected: MapPlace? = null
     private var released = false
     private var started = false
     private var resumed = false
@@ -178,7 +235,7 @@ private class MapViewLifecycle(
     }
     private val cameraIdle = MapLibreMap.OnCameraIdleListener {
         saveState()
-        reportViewport()
+        if (!zoom.isFlightOverview) reportViewport()
     }
     private val cameraMoving = MapLibreMap.OnCameraMoveStartedListener { callbacks().cameraMoving() }
     private val mapLoaded = MapView.OnDidFinishLoadingMapListener { callbacks().baseLoaded() }
@@ -261,7 +318,7 @@ private class MapViewLifecycle(
         if (map != null) callbacks().saveState(Bundle().also(view::onSaveInstanceState))
     }
 
-    fun setPlaces(places: List<MapPlace>, selected: UUID?) {
+    fun setPlaces(places: List<MapPlace>, selected: MapPlace?) {
         this.places = places
         this.selected = selected
         markers?.update(places)

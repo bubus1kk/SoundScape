@@ -168,6 +168,116 @@ class MapViewModelTest {
         assertEquals(1, source.reads.size)
     }
 
+    @Test fun randomUsesVisiblePlacesAndKeepsCardWhenNewViewportHasNoResults() = runTest(dispatcher) {
+        val city = place(MapPlaceKind.CITY)
+        val pin = place(MapPlaceKind.PIN)
+        val source = Source().apply {
+            read = { area, _ ->
+                DomainResult.Success(Page(if (area == first) listOf(city, pin) else emptyList(), false))
+            }
+        }
+        val vm = model(source)
+        vm.onCameraIdle(first)
+        advanceTimeBy(300)
+        runCurrent()
+        vm.chooseRandomPlace(citiesOnly = true)
+        val flight = vm.randomPlace.value as RandomPlace.Flight
+        assertEquals(city, flight.place)
+        vm.chooseRandomPlace(citiesOnly = false)
+        assertEquals(flight, vm.randomPlace.value)
+        assertNull(vm.state.value.selected)
+        vm.finishRandomFlight(flight, arrived = true)
+        vm.onCameraIdle(second)
+        advanceTimeBy(300)
+        runCurrent()
+        assertEquals(city, vm.state.value.selected)
+        assertEquals(listOf(first, second), source.reads.map { it.first })
+    }
+
+    @Test fun randomFallbackHandlesFailureAndCoalescesRepeatedTaps() = runTest(dispatcher) {
+        val pin = place(MapPlaceKind.PIN)
+        val source = Source().apply { read = { _, _ -> DomainResult.Failure(DomainError.Network) } }
+        val vm = model(source)
+        vm.chooseRandomPlace(citiesOnly = false)
+        runCurrent()
+        assertEquals(RandomPlace.Failed, vm.randomPlace.value)
+        source.read = { _, _ -> DomainResult.Success(Page(listOf(pin), false)) }
+        repeat(3) { vm.chooseRandomPlace(citiesOnly = false) }
+        runCurrent()
+        val flight = vm.randomPlace.value as RandomPlace.Flight
+        assertEquals(pin, flight.place)
+        vm.finishRandomFlight(flight, arrived = false)
+        assertNull(vm.state.value.selected)
+        vm.chooseRandomPlace(citiesOnly = true)
+        runCurrent()
+        assertEquals(RandomPlace.Empty, vm.randomPlace.value)
+        vm.chooseRandomPlace(citiesOnly = false)
+        runCurrent()
+        assertEquals(pin, (vm.randomPlace.value as RandomPlace.Flight).place)
+        assertEquals(2, source.reads.size)
+    }
+
+    @Test fun randomReportsAnEmptyPublicPageWithoutRefetchingItOnEveryTap() = runTest(dispatcher) {
+        val source = Source()
+        val vm = model(source)
+        repeat(2) {
+            vm.chooseRandomPlace(citiesOnly = false)
+            runCurrent()
+            assertEquals(RandomPlace.Empty, vm.randomPlace.value)
+        }
+        assertEquals(1, source.reads.size)
+    }
+
+    @Test fun randomUsesPreviousViewportWhenTheFlightLeavesOnlyTheChosenCityVisible() = runTest(dispatcher) {
+        val rome = place(MapPlaceKind.CITY)
+        val madrid = place(MapPlaceKind.CITY)
+        val vmSource = Source().apply {
+            read = { _, _ -> DomainResult.Success(Page(listOf(rome, madrid), false)) }
+        }
+        val vm = model(vmSource)
+        vm.onCameraIdle(first)
+        advanceTimeBy(300)
+        runCurrent()
+        vm.chooseRandomPlace(citiesOnly = true)
+        val opened = vm.randomPlace.value as RandomPlace.Flight
+        vm.finishRandomFlight(opened, arrived = true)
+        vm.select(null)
+        vmSource.read = { _, _ -> DomainResult.Success(Page(listOf(opened.place), false)) }
+        vm.onCameraIdle(second)
+        advanceTimeBy(300)
+        runCurrent()
+
+        vm.chooseRandomPlace(citiesOnly = true)
+        val expected = listOf(rome, madrid).single { it != opened.place }
+        assertEquals(expected, (vm.randomPlace.value as RandomPlace.Flight).place)
+        assertEquals(listOf(first, second), vmSource.reads.map { it.first })
+    }
+
+    @Test fun randomFallsBackWhenOnlyTheLastCityIsKnownAndDoesNotOpenItAgain() = runTest(dispatcher) {
+        val rome = place(MapPlaceKind.CITY)
+        val pin = place(MapPlaceKind.PIN)
+        val source = Source().apply {
+            read = { area, _ ->
+                DomainResult.Success(Page(if (area == first) listOf(rome) else listOf(rome, pin), false))
+            }
+        }
+        val vm = model(source)
+        vm.onCameraIdle(first)
+        advanceTimeBy(300)
+        runCurrent()
+        vm.chooseRandomPlace(citiesOnly = true)
+        vm.finishRandomFlight(vm.randomPlace.value as RandomPlace.Flight, arrived = true)
+        vm.select(null)
+
+        vm.chooseRandomPlace(citiesOnly = true)
+        runCurrent()
+        assertEquals(RandomPlace.Empty, vm.randomPlace.value)
+        vm.chooseRandomPlace(citiesOnly = false)
+        runCurrent()
+        assertEquals(pin, (vm.randomPlace.value as RandomPlace.Flight).place)
+        assertEquals(2, source.reads.size)
+    }
+
     private fun model(source: Source) = MapViewModel(GetVisiblePlacesUseCase(source),
         ObserveVisiblePlacesUseCase(source), RefreshVisiblePlacesUseCase(source)).also { store.put("map", it) }
 

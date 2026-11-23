@@ -27,13 +27,15 @@ import org.maplibre.geojson.Point
 internal class MapMarkers(style: Style, context: Context, primary: Int, selectedColor: Int) {
     private val source = GeoJsonSource(SOURCE, GeoJsonOptions().withCluster(true)
         .withClusterRadius(48).withClusterMaxZoom(16))
+    private val focusSource = GeoJsonSource(FOCUS_SOURCE)
     private var drawn: List<MapPlace>? = null
-    private var selected: UUID? = null
+    private var focused: MapPlace? = null
     private val cluster = Expression.has("point_count")
     private val pinLayer = SymbolLayer(PLACES, SOURCE)
 
     init {
         style.addSource(source)
+        style.addSource(focusSource)
         style.addLayer(CircleLayer(CLUSTERS, SOURCE).withFilter(cluster).withProperties(
             PropertyFactory.circleRadius(CLUSTER_RADIUS_DP),
             PropertyFactory.circleColor(primary),
@@ -55,29 +57,23 @@ internal class MapMarkers(style: Style, context: Context, primary: Int, selected
             PropertyFactory.iconAllowOverlap(true),
             PropertyFactory.iconIgnorePlacement(true),
         ))
+        style.addLayer(SymbolLayer(FOCUS, FOCUS_SOURCE).withProperties(
+            PropertyFactory.iconImage(SELECTED_PIN_ICON),
+            PropertyFactory.iconAllowOverlap(true),
+            PropertyFactory.iconIgnorePlacement(true),
+        ))
     }
 
     fun update(places: List<MapPlace>) {
         if (drawn == places) return
         drawn = places
-        val features = places.map {
-            Feature.fromGeometry(Point.fromLngLat(it.coordinates.longitude, it.coordinates.latitude),
-                null, it.id.toString())
-        }
-        source.setGeoJson(FeatureCollection.fromFeatures(features))
+        source.setGeoJson(FeatureCollection.fromFeatures(places.map(MapPlace::asFeature)))
     }
 
-    fun select(id: UUID?) {
-        if (selected == id) return
-        selected = id
-        val icon = if (id == null) PropertyFactory.iconImage(PIN_ICON) else PropertyFactory.iconImage(
-            Expression.switchCase(
-                Expression.eq(Expression.id(), Expression.literal(id.toString())),
-                Expression.literal(SELECTED_PIN_ICON),
-                Expression.literal(PIN_ICON),
-            ),
-        )
-        pinLayer.setProperties(icon)
+    fun select(place: MapPlace?) {
+        if (focused == place) return
+        focused = place
+        focusSource.setGeoJson(FeatureCollection.fromFeatures(listOfNotNull(place?.asFeature())))
     }
 
     fun click(map: MapLibreMap, at: LatLng, touchSlop: Float, select: (UUID?) -> Unit): Boolean {
@@ -101,6 +97,8 @@ internal class MapMarkers(style: Style, context: Context, primary: Int, selected
         const val CLUSTERS = "soundscape-clusters"
         const val COUNTS = "soundscape-cluster-counts"
         const val PLACES = "soundscape-places"
+        const val FOCUS_SOURCE = "soundscape-focused-place"
+        const val FOCUS = "soundscape-focused-place-pin"
         const val PIN_ICON = "soundscape-music-pin"
         const val SELECTED_PIN_ICON = "soundscape-selected-music-pin"
         const val CLUSTER_RADIUS_DP = 21f
@@ -108,6 +106,9 @@ internal class MapMarkers(style: Style, context: Context, primary: Int, selected
         const val COUNT_TEXT_DP = 13f
     }
 }
+
+private fun MapPlace.asFeature(): Feature =
+    Feature.fromGeometry(Point.fromLngLat(coordinates.longitude, coordinates.latitude), null, id.toString())
 
 private fun mapPin(density: Float, primary: Int): Bitmap {
     val bitmap = Bitmap.createBitmap(

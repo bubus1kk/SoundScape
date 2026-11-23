@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,9 +19,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -103,6 +107,7 @@ private fun MapHeader(onProfile: () -> Unit) {
 @Composable
 private fun ConfiguredMap(apiKey: String, model: MapViewModel, offline: Boolean) {
     val places by model.state.collectAsStateWithLifecycle()
+    val random by model.randomPlace.collectAsStateWithLifecycle()
     val primary = SoundScapeTheme.colors.primary.toArgb()
     var mapState by rememberSaveable { mutableStateOf<Bundle?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -110,9 +115,12 @@ private fun ConfiguredMap(apiKey: String, model: MapViewModel, offline: Boolean)
     var citiesOnly by rememberSaveable { mutableStateOf(false) }
     var panel by remember { mutableStateOf<MapPanel?>(null) }
     val zoom = remember { MapZoomControls() }
-    val markers = remember(places.places, citiesOnly) {
-        if (citiesOnly) places.places.filter { it.kind == MapPlaceKind.CITY } else places.places
+    val snackbar = remember { SnackbarHostState() }
+    val focus = (random as? RandomPlace.Flight)?.place ?: places.selected
+    val markers = remember(places.places, citiesOnly, focus?.id) {
+        places.places.filter { it.id != focus?.id && (!citiesOnly || it.kind == MapPlaceKind.CITY) }
     }
+    RandomPlaceEffects(model, random, zoom, snackbar)
     LaunchedEffect(status, offline) {
         if (status == BaseMapStatus.Loading && offline) {
             delay(OFFLINE_TILE_GRACE_MS)
@@ -134,21 +142,19 @@ private fun ConfiguredMap(apiKey: String, model: MapViewModel, offline: Boolean)
                         select = model::select,
                     ),
                     places = markers,
-                    selected = places.selected?.id,
+                    selected = focus,
                     markerColor = primary,
                     zoom = zoom,
                     modifier = Modifier.fillMaxSize().testTag("ss09-map"),
                 )
             }
-            MapControls(citiesOnly, zoom) { panel = it }
-            when (status) {
-                BaseMapStatus.Loading -> CircularProgressIndicator()
-                BaseMapStatus.Failed -> {
-                    val message = if (offline) R.string.map_tiles_offline else R.string.map_tiles_unavailable
-                    MapMessage(stringResource(message)) { attempt++ }
-                }
-                BaseMapStatus.Ready -> MapPlacesStatus(places, markers.isEmpty(), offline, model::retry)
+            val chooseRandom = { model.chooseRandomPlace(citiesOnly) }
+            MapControls(citiesOnly, zoom, chooseRandom.takeIf { status == BaseMapStatus.Ready && !random.busy }) {
+                model.cancelRandom()
+                panel = it
             }
+            MapStatus(status, places, markers.isEmpty() && focus == null, offline, { attempt++ }, model::retry)
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
         }
         MapAttribution()
     }
@@ -158,6 +164,47 @@ private fun ConfiguredMap(apiKey: String, model: MapViewModel, offline: Boolean)
         panel = null
     }
     places.selected?.let { place -> MapPlaceCard(place) { model.select(null) } }
+}
+
+@Composable
+private fun BoxScope.MapStatus(
+    status: BaseMapStatus,
+    places: MapPlacesState,
+    noMarkers: Boolean,
+    offline: Boolean,
+    retryTiles: () -> Unit,
+    retryPlaces: () -> Unit,
+) {
+    when (status) {
+        BaseMapStatus.Loading -> CircularProgressIndicator()
+        BaseMapStatus.Failed -> {
+            val message = if (offline) R.string.map_tiles_offline else R.string.map_tiles_unavailable
+            MapMessage(stringResource(message), retryTiles)
+        }
+        BaseMapStatus.Ready -> MapPlacesStatus(places, noMarkers, offline, retryPlaces)
+    }
+}
+
+@Composable
+private fun RandomPlaceEffects(
+    model: MapViewModel,
+    random: RandomPlace,
+    zoom: MapZoomControls,
+    snackbar: SnackbarHostState,
+) {
+    val empty = stringResource(R.string.map_random_empty)
+    val failed = stringResource(R.string.map_random_failed)
+    DisposableEffect(model) { onDispose(model::cancelRandom) }
+    LaunchedEffect(random) {
+        when (random) {
+            is RandomPlace.Flight -> model.finishRandomFlight(random, zoom.flyTo(random.place))
+            RandomPlace.Empty, RandomPlace.Failed -> {
+                snackbar.showSnackbar(if (random == RandomPlace.Empty) empty else failed)
+                model.dismissRandomNotice()
+            }
+            else -> Unit
+        }
+    }
 }
 
 @Composable
