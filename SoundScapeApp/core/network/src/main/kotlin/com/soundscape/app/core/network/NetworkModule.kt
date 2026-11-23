@@ -98,6 +98,7 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
     }
     @Provides fun places(retrofit: Retrofit): PlacesApi = retrofit.create(PlacesApi::class.java)
+    @Provides fun globalSearch(retrofit: Retrofit): GlobalSearchApi = retrofit.create(GlobalSearchApi::class.java)
     @Provides fun tracks(retrofit: Retrofit): TracksApi = retrofit.create(TracksApi::class.java)
     @Provides fun playlists(retrofit: Retrofit): PlaylistsApi = retrofit.create(PlaylistsApi::class.java)
     @Provides fun resolveTrack(retrofit: Retrofit): ResolveTrackApi = retrofit.create(ResolveTrackApi::class.java)

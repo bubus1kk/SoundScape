@@ -24,6 +24,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.soundscape.app.core.domain.model.MediaImageRequest
+import com.soundscape.app.core.domain.model.MediaObjectType
+import com.soundscape.app.core.domain.repository.SearchCategory
+import com.soundscape.app.presentation.search.GlobalSearchScreen
+import com.soundscape.app.presentation.search.GlobalSearchViewModel
 import com.soundscape.app.BuildConfig
 import com.soundscape.app.core.designsystem.ui.components.SoundScapeButton
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
@@ -35,6 +44,8 @@ import com.soundscape.app.presentation.home.HomeViewModel
 import com.soundscape.app.presentation.map.MapScreen
 import com.soundscape.app.presentation.map.MapViewModel
 import kotlinx.coroutines.flow.Flow
+
+private const val SEARCH_ROUTE = "search/{origin}"
 
 @Composable
 fun SoundScapeNavHost(imageLoader: ImageLoader, offline: Flow<Boolean>? = null) {
@@ -65,7 +76,7 @@ internal fun SoundScapeNavHost(
             if (route != ProfileNavigation.Edit && route != ProfileNavigation.SignIn &&
                 route?.startsWith(SETTINGS_ROUTE_PREFIX) != true
             ) {
-                val selected = if (route?.startsWith("profile") == true) AppDestination.Library.route else route
+                val selected = if (route?.startsWith("profile") == true) AppDestination.Library.route else if (route == SEARCH_ROUTE) entry?.arguments?.getString("origin") else route
                 AppBottomBar(selected, personalProfile = route == ProfileNavigation.Own) { destination ->
                     controller.navigate(destination.route) {
                         popUpTo(controller.graph.findStartDestination().id) { saveState = true }
@@ -78,16 +89,39 @@ internal fun SoundScapeNavHost(
     ) { padding ->
         NavHost(controller, startDestination = AppDestination.Music.route, modifier = Modifier.padding(padding)) {
             composable(AppDestination.Music.route) {
-                HomeWithNotices(snackbar, homeContent) { controller.openProfileRoute(ProfileNavigation.Own) }
+                HomeWithNotices(snackbar, homeContent,
+                    openProfile = { controller.openProfileRoute(ProfileNavigation.Own) },
+                    openSearch = { controller.navigate("search/music") { launchSingleTop = true } },
+                )
             }
             composable(AppDestination.Map.route) {
                 val model = if (mapTilerKey.isBlank()) null else hiltViewModel<MapViewModel>()
                 val isOffline = offline?.collectAsStateWithLifecycle(initialValue = false)?.value ?: false
-                MapScreen(mapTilerKey, model, isOffline) { controller.openProfileRoute(ProfileNavigation.Own) }
+                MapScreen(mapTilerKey, model, isOffline,
+                    onSearch = { controller.navigate("search/map") { launchSingleTop = true } },
+                    onProfile = { controller.openProfileRoute(ProfileNavigation.Own) },
+                )
             }
             composable(AppDestination.Library.route) { PendingScreen(stringResource(R.string.nav_library)) {
                 controller.popBackStack(AppDestination.Music.route, false)
             } }
+            composable(SEARCH_ROUTE, arguments = listOf(navArgument("origin") { type = NavType.StringType })) {
+                val model: GlobalSearchViewModel = hiltViewModel()
+                val state by model.state.collectAsStateWithLifecycle()
+                val isOffline = offline?.collectAsStateWithLifecycle(initialValue = false)?.value ?: false
+                GlobalSearchScreen(state, model, isOffline, { controller.popBackStack() },
+                    { controller.openProfileRoute(ProfileNavigation.public(it.id)) }) { hit, modifier ->
+                    val type = when (hit.category) {
+                        SearchCategory.PLACE -> MediaObjectType.PLACE
+                        SearchCategory.PLAYLIST -> MediaObjectType.PLAYLIST
+                        else -> null
+                    }
+                    if (type != null && imageLoader != null) {
+                        AsyncImage(MediaImageRequest(type, hit.id), null, imageLoader, modifier,
+                            contentScale = ContentScale.Crop)
+                    }
+                }
+            }
             installProfileRoutes(controller, imageLoader, personalContent)
             installSettingsRoutes(controller, offline)
         }
@@ -118,10 +152,15 @@ private fun HomeWithNotices(
     snackbar: SnackbarHostState,
     homeContent: @Composable ((HomeAction) -> Unit) -> Unit,
     openProfile: () -> Unit,
+    openSearch: () -> Unit,
 ) {
     var notice by remember { mutableStateOf<Int?>(null) }
     homeContent { action ->
-        if (action == HomeAction.Profile) openProfile() else notice = action.noticeResource()
+        when (action) {
+            HomeAction.Profile -> openProfile()
+            HomeAction.Search -> openSearch()
+            else -> notice = action.noticeResource()
+        }
     }
     val message = notice?.let { stringResource(it) }
     LaunchedEffect(message) {

@@ -51,10 +51,10 @@ import com.soundscape.app.presentation.R
 import kotlinx.coroutines.delay
 
 @Composable
-fun MapScreen(apiKey: String, model: MapViewModel?, offline: Boolean, onProfile: () -> Unit) {
+fun MapScreen(apiKey: String, model: MapViewModel?, offline: Boolean, onSearch: () -> Unit, onProfile: () -> Unit) {
     val colors = SoundScapeTheme.colors
     Column(Modifier.fillMaxSize()) {
-        MapHeader(onProfile)
+        MapHeader(onSearch, onProfile)
         Surface(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             color = colors.surfaceAlt,
@@ -71,7 +71,7 @@ fun MapScreen(apiKey: String, model: MapViewModel?, offline: Boolean, onProfile:
 }
 
 @Composable
-private fun MapHeader(onProfile: () -> Unit) {
+private fun MapHeader(onSearch: () -> Unit, onProfile: () -> Unit) {
     val spacing = SoundScapeTheme.spacing
     val colors = SoundScapeTheme.colors
     Surface(color = colors.surface) {
@@ -86,8 +86,8 @@ private fun MapHeader(onProfile: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 color = colors.text,
             )
-            IconButton(onClick = {}, enabled = false) {
-                Icon(painterResource(R.drawable.ic_search), stringResource(R.string.map_search_unavailable))
+            IconButton(onClick = onSearch) {
+                Icon(painterResource(R.drawable.ic_search), stringResource(R.string.search_title))
             }
             IconButton(onClick = onProfile) {
                 Surface(shape = CircleShape, color = colors.primarySoft) {

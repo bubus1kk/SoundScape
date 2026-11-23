@@ -1,5 +1,6 @@
 package com.soundscape.app.core.data
 
+import com.soundscape.app.core.domain.repository.GlobalSearchRepository
 import com.soundscape.app.core.domain.repository.TrackSearcher
 import com.soundscape.app.core.domain.repository.VisiblePlacesReader
 import com.soundscape.app.core.data.cache.OfflineFirstVisiblePlaces
@@ -19,6 +20,7 @@ import dagger.hilt.components.SingletonComponent
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DataModule {
+    @Binds abstract fun globalSearch(reader: RemoteGlobalSearchRepository): GlobalSearchRepository
     @Binds abstract fun visible(reader: OfflineFirstVisiblePlaces): VisiblePlacesReader
     @Binds abstract fun search(searcher: OfflineFirstTrackSearcher): TrackSearcher
     @Binds abstract fun mapCache(reader: OfflineFirstVisiblePlaces): VisiblePlacesCache
