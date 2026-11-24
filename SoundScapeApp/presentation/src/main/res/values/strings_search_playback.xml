@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_play_track">Слушать</string>
+    <string name="search_pause_track">Пауза</string>
+    <string name="search_resume_track">Продолжить</string>
+    <string name="search_loading_track">Загрузка…</string>
+    <string name="search_retry_track">Сбой · повторить</string>
+    <string name="search_open_track">Открыть</string>
+</resources>

@@ -15,10 +15,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -68,21 +72,20 @@ internal fun SoundScapeNavHost(
     val controller = rememberNavController()
     val entry by controller.currentBackStackEntryAsState()
     val snackbar = remember { SnackbarHostState() }
+    var generatorChrome by remember { mutableStateOf(true) }
     Scaffold(
         containerColor = SoundScapeTheme.colors.background,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             val route = entry?.destination?.route
-            if (route != ProfileNavigation.Edit && route != ProfileNavigation.SignIn &&
-                route?.startsWith(SETTINGS_ROUTE_PREFIX) != true
-            ) {
-                val selected = if (route?.startsWith("profile") == true) AppDestination.Library.route else if (route == SEARCH_ROUTE) entry?.arguments?.getString("origin") else route
+            if (showsBottomBar(route, generatorChrome)) {
+                val selected = when (route) {
+                    SEARCH_ROUTE -> entry?.arguments?.getString("origin")
+                    GENERATOR_ROUTE, GENERATION_RESULT_ROUTE -> AppDestination.Music.route
+                    else -> if (route?.startsWith("profile") == true) AppDestination.Library.route else route
+                }
                 AppBottomBar(selected, personalProfile = route == ProfileNavigation.Own) { destination ->
-                    controller.navigate(destination.route) {
-                        popUpTo(controller.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                    controller.goToTab(destination.route)
                 }
             }
         },
@@ -92,6 +95,7 @@ internal fun SoundScapeNavHost(
                 HomeWithNotices(snackbar, homeContent,
                     openProfile = { controller.openProfileRoute(ProfileNavigation.Own) },
                     openSearch = { controller.navigate("search/music") { launchSingleTop = true } },
+                    openGenerator = { controller.navigate(GENERATOR_ROUTE) { launchSingleTop = true } },
                 )
             }
             composable(AppDestination.Map.route) {
@@ -106,24 +110,51 @@ internal fun SoundScapeNavHost(
                 controller.popBackStack(AppDestination.Music.route, false)
             } }
             composable(SEARCH_ROUTE, arguments = listOf(navArgument("origin") { type = NavType.StringType })) {
-                val model: GlobalSearchViewModel = hiltViewModel()
-                val state by model.state.collectAsStateWithLifecycle()
-                val isOffline = offline?.collectAsStateWithLifecycle(initialValue = false)?.value ?: false
-                GlobalSearchScreen(state, model, isOffline, { controller.popBackStack() },
-                    { controller.openProfileRoute(ProfileNavigation.public(it.id)) }) { hit, modifier ->
-                    val type = when (hit.category) {
-                        SearchCategory.PLACE -> MediaObjectType.PLACE
-                        SearchCategory.PLAYLIST -> MediaObjectType.PLAYLIST
-                        else -> null
-                    }
-                    if (type != null && imageLoader != null) {
-                        AsyncImage(MediaImageRequest(type, hit.id), null, imageLoader, modifier,
-                            contentScale = ContentScale.Crop)
-                    }
-                }
+                SearchRoute(controller, imageLoader, offline)
             }
+            installWorkshopRoutes(controller, offline, generatorChrome = { generatorChrome = it })
             installProfileRoutes(controller, imageLoader, personalContent)
             installSettingsRoutes(controller, offline)
+        }
+    }
+}
+
+private fun showsBottomBar(route: String?, generatorChrome: Boolean): Boolean = when (route) {
+    ProfileNavigation.Edit, ProfileNavigation.SignIn -> false
+    GENERATOR_ROUTE -> generatorChrome
+    else -> route?.startsWith(SETTINGS_ROUTE_PREFIX) != true
+}
+
+private fun NavHostController.goToTab(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+@Composable
+private fun SearchRoute(controller: NavHostController, imageLoader: ImageLoader?, offline: Flow<Boolean>?) {
+    val model: GlobalSearchViewModel = hiltViewModel()
+    val playback: SearchPlaybackViewModel = hiltViewModel()
+    val playbackState by playback.state.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { playback.pause() }
+    val state by model.state.collectAsStateWithLifecycle()
+    val isOffline = offline?.collectAsStateWithLifecycle(initialValue = false)?.value ?: false
+    LaunchedEffect(state.query.trim(), state.category, state.filters) { playback.pause() }
+    GlobalSearchScreen(state, model, isOffline, { controller.popBackStack() },
+        { controller.openProfileRoute(ProfileNavigation.public(it.id)) },
+        playbackState, { hit -> playback.toggle(hit) { uriHandler.openUri(it.toString()) } },
+    ) { hit, modifier ->
+        val type = when (hit.category) {
+            SearchCategory.PLACE -> MediaObjectType.PLACE
+            SearchCategory.PLAYLIST -> MediaObjectType.PLAYLIST
+            else -> null
+        }
+        if (type != null && imageLoader != null) {
+            AsyncImage(MediaImageRequest(type, hit.id), null, imageLoader, modifier,
+                contentScale = ContentScale.Crop)
         }
     }
 }
@@ -153,12 +184,14 @@ private fun HomeWithNotices(
     homeContent: @Composable ((HomeAction) -> Unit) -> Unit,
     openProfile: () -> Unit,
     openSearch: () -> Unit,
+    openGenerator: () -> Unit,
 ) {
     var notice by remember { mutableStateOf<Int?>(null) }
     homeContent { action ->
         when (action) {
             HomeAction.Profile -> openProfile()
             HomeAction.Search -> openSearch()
+            HomeAction.CreatePlaylist -> openGenerator()
             else -> notice = action.noticeResource()
         }
     }

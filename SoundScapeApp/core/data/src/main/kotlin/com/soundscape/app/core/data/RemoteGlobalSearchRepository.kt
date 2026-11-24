@@ -30,6 +30,9 @@ import kotlinx.serialization.json.Json
 private val Context.searchStore by preferencesDataStore(name = "global_search")
 private val historyKey = stringPreferencesKey("history")
 private const val HISTORY_LIMIT = 20
+private const val MAX_QUERY_LENGTH = 200
+private const val MAX_PAGE_SIZE = 50
+private const val MAX_OFFSET = 1000
 
 class RemoteGlobalSearchRepository @Inject constructor(
     @ApplicationContext context: Context,
@@ -53,7 +56,7 @@ class RemoteGlobalSearchRepository @Inject constructor(
     }
 
     override suspend fun search(request: GlobalSearch, limit: Int, offset: Int): DomainResult<Page<SearchHit>> {
-        if (request.query.length !in 1..200 || limit !in 1..50 || offset !in 0..1000) {
+        if (request.query.length !in 1..MAX_QUERY_LENGTH || limit !in 1..MAX_PAGE_SIZE || offset !in 0..MAX_OFFSET) {
             return DomainResult.Failure(DomainError.Validation("search", "outside_range"))
         }
         val dto = request.toDto(limit, offset)
@@ -62,7 +65,7 @@ class RemoteGlobalSearchRepository @Inject constructor(
             Page(response.items.map {
                 SearchHit(SearchCategory.valueOf(it.category), UUID.fromString(it.id), it.title, it.subtitle,
                     it.coverPath, it.availability?.let(TrackAvailability::valueOf))
-            }, response.hasMore && response.items.isNotEmpty() && offset + limit <= 1000)
+            }, response.hasMore && response.items.isNotEmpty() && offset + limit <= MAX_OFFSET)
         }
     }
 
@@ -72,7 +75,8 @@ class RemoteGlobalSearchRepository @Inject constructor(
         }
 
     private fun GlobalSearch.toDto(limit: Int, offset: Int) = GlobalSearchRequestDto(
-        query, categories = category?.let { listOf(it.name) }, genreIds = listOfNotNull(filters.genreId), moodIds = listOfNotNull(filters.moodId),
+        query, categories = category?.let { listOf(it.name) },
+        genreIds = listOfNotNull(filters.genreId), moodIds = listOfNotNull(filters.moodId),
         onlyInApp = filters.onlyInApp, limit = limit, offset = offset,
     )
 

@@ -120,6 +120,26 @@ class SupabaseProfileSession @Inject constructor(
         }
     }
 
+    internal suspend fun <T> authorizedOnce(
+        request: suspend (SessionCredential) -> DomainResult<T>,
+    ): DomainResult<T> {
+        restore()
+        val id = account.value ?: return DomainResult.Failure(DomainError.Unauthenticated)
+        return when (val value = credential(id)) {
+            is DomainResult.Success -> {
+                val token = value.value
+                val result = request(SessionCredential(token))
+                if (result == DomainResult.Failure(DomainError.Unauthenticated)) {
+                    mutex.withLock {
+                        if (current?.id == id && current?.access == token) install(null)
+                    }
+                }
+                if (account.value == id) result else DomainResult.Failure(DomainError.Unauthenticated)
+            }
+            is DomainResult.Failure -> value
+        }
+    }
+
     internal suspend fun <T> authorized(
         id: UUID, request: suspend (SessionCredential) -> DomainResult<T>,
     ): DomainResult<T> {

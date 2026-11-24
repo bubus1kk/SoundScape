@@ -22,6 +22,7 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.doubleClick
@@ -29,6 +30,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
@@ -147,20 +149,33 @@ class NavigationTest {
         compose.onNodeWithTag("home-feed").assertExists()
     }
 
-    @Test fun repeatedActionsShowOneNoticeAndKeepHomeVisible() {
+    @Test fun repeatedUnavailableCityActionsShowOneNoticeAndKeepHomeVisible() {
         setContent()
+        val city = UUID.randomUUID()
+        val playlist = UUID.randomUUID()
         for ((action, message) in listOf(
-            HomeAction.Search to PresentationR.string.home_search_unavailable,
-            HomeAction.CreatePlaylist to PresentationR.string.home_ai_unavailable,
+            HomeAction.City(city, null) to PresentationR.string.home_city_no_playlist,
+            HomeAction.City(city, playlist) to PresentationR.string.home_city_playlist_unavailable,
         )) {
             compose.runOnIdle { repeat(5) { requireNotNull(dispatch)(action) } }
             compose.onNodeWithText(text(message)).assertIsDisplayed()
+            compose.onAllNodesWithText(text(message)).assertCountEquals(1)
             compose.onNodeWithText("Музыка").assertIsSelected()
             compose.onNodeWithTag("home-feed").assertExists()
         }
         compose.onNodeWithText("Карта").performClick()
         pressBack()
         compose.onNodeWithTag("home-feed").assertExists()
+    }
+
+    @Test fun opensSearchFromHomeAndReturnsThroughExistingBackStack() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            compose.onNodeWithText(text(PresentationR.string.home_search)).performClick()
+            compose.onNodeWithText(text(PresentationR.string.search_title)).assertIsDisplayed()
+            compose.onNodeWithText(text(PresentationR.string.search_tracks)).performClick()
+            pressBack()
+            compose.onNodeWithTag("home-feed").assertExists()
+        }
     }
 
     @Test fun mapViewIsRecreatedAndReleasedWhenLeavingTabOrRecreatingActivity() {

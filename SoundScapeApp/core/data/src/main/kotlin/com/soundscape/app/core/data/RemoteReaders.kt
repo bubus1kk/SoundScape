@@ -99,7 +99,8 @@ class NetworkErrorMapper @Inject constructor(private val json: Json) {
             code == "PT401" && message == "AUTH_REQUIRED") DomainError.Unauthenticated
         else DomainError.Unexpected
     private fun validationError(code: String?, message: String?): DomainError =
-        if (code == "invalid_credentials") DomainError.InvalidCredentials
+        if (code == "NO_CANDIDATES") DomainError.Validation("tracks", "no_candidates")
+        else if (code == "invalid_credentials") DomainError.InvalidCredentials
         else if (code == "VALIDATION_ERROR" ||
             code == "PT422" && message in setOf("INVALID_BOUNDS", "INVALID_PAGINATION"))
             DomainError.Validation("request", "invalid_request")
