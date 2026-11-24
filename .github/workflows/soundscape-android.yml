@@ -65,6 +65,8 @@ jobs:
           git diff --exit-code -- core/database/schemas
       - name: Unit tests
         run: sh ./gradlew :core:database:testDebugUnitTest :app:testDebugUnitTest :presentation:testDebugUnitTest :core:network:testDebugUnitTest :core:data:testDebugUnitTest --no-daemon
+      - name: JVM coverage reports
+        run: sh ./gradlew :core:domain:koverXmlReport :core:domain:koverHtmlReport :presentation:koverXmlReportDebug :presentation:koverHtmlReportDebug --no-daemon
       - name: Detekt
         run: sh ./gradlew detekt --no-daemon
       - name: Android Lint

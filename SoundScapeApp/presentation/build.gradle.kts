@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -21,6 +22,25 @@ android {
 detekt {
     buildUponDefaultConfig = true
     config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                annotatedBy("androidx.compose.runtime.Composable")
+                classes(
+                    "com.soundscape.app.presentation.Hilt_*",
+                    "com.soundscape.app.presentation.*.Hilt_*",
+                    "com.soundscape.app.presentation.*.*_Factory",
+                    "com.soundscape.app.presentation.*.*_HiltModules*",
+                    "com.soundscape.app.presentation.R",
+                    "com.soundscape.app.presentation.R$*",
+                    "com.soundscape.app.presentation.BuildConfig",
+                )
+            }
+        }
+    }
 }
 
 dependencies {

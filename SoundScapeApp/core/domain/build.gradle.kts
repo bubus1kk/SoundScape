@@ -1,4 +1,7 @@
-plugins { alias(libs.plugins.kotlin.jvm) }
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kover)
+}
 
 dependencies {
     implementation(libs.kotlinx.coroutines.core)

@@ -12,6 +12,7 @@ composeBom = "2026.02.01"
 hilt = "2.60.1"
 ksp = "2.3.10"
 detekt = "2.0.0-alpha.6"
+kover = "0.9.8"
 coroutines = "1.10.2"
 coil = "3.3.0"
 maplibre = "13.7.1"
@@ -61,6 +62,7 @@ androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-te
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 
 [plugins]
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
