@@ -80,16 +80,9 @@ internal class MapMarkers(style: Style, context: Context, primary: Int, selected
         val screen = map.projection.toScreenLocation(at)
         val box = RectF(screen.x - touchSlop, screen.y - touchSlop, screen.x + touchSlop, screen.y + touchSlop)
         val feature = map.queryRenderedFeatures(box, PLACES, CLUSTERS).firstOrNull()
-        if (feature?.hasProperty("cluster_id") == true) {
-            val point = feature.geometry() as? Point ?: return false
-            val zoom = source.getClusterExpansionZoom(feature)
-            if (zoom >= 0) map.animateCamera(CameraUpdateFactory.newLatLngZoom(
-                LatLng(point.latitude(), point.longitude()), zoom.toDouble()))
-        } else {
-            val id = feature?.id()?.let(UUID::fromString)
-            select(id)
+        return dispatchMarkerClick(feature, source::getClusterExpansionZoom, select) { point, zoom ->
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude(), point.longitude()), zoom))
         }
-        return feature != null
     }
 
     private companion object {
@@ -107,7 +100,24 @@ internal class MapMarkers(style: Style, context: Context, primary: Int, selected
     }
 }
 
-private fun MapPlace.asFeature(): Feature =
+/** Routes a rendered feature to selection or cluster expansion. */
+internal fun dispatchMarkerClick(
+    feature: Feature?,
+    expansionZoom: (Feature) -> Int,
+    select: (UUID?) -> Unit,
+    expand: (Point, Double) -> Unit,
+): Boolean {
+    if (feature?.hasProperty("cluster_id") == true) {
+        val point = feature.geometry() as? Point ?: return false
+        val zoom = expansionZoom(feature)
+        if (zoom >= 0) expand(point, zoom.toDouble())
+    } else {
+        select(feature?.id()?.let(UUID::fromString))
+    }
+    return feature != null
+}
+
+internal fun MapPlace.asFeature(): Feature =
     Feature.fromGeometry(Point.fromLngLat(coordinates.longitude, coordinates.latitude), null, id.toString())
 
 private fun mapPin(density: Float, primary: Int): Bitmap {

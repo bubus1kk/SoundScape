@@ -14,6 +14,7 @@ import com.soundscape.app.core.domain.repository.SearchHit
 import com.soundscape.app.core.domain.repository.SearchOption
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -29,6 +30,8 @@ private const val DEBOUNCE_MS = 450L
 private const val DEFAULT_RETRY_MS = 30_000L
 private const val CACHE_TTL_MS = 60_000L
 private const val CACHE_SIZE = 8
+
+private fun monotonicMillis() = TimeUnit.NANOSECONDS.toMillis(System.nanoTime())
 
 data class SearchResults(val items: List<SearchHit>, val nextOffset: Int, val hasMore: Boolean)
 
@@ -48,10 +51,14 @@ data class GlobalSearchState(
 )
 
 @HiltViewModel
-class GlobalSearchViewModel @Inject constructor(
+class GlobalSearchViewModel internal constructor(
     private val saved: SavedStateHandle,
     private val repository: GlobalSearchRepository,
+    private val now: () -> Long,
 ) : ViewModel() {
+    @Inject constructor(saved: SavedStateHandle, repository: GlobalSearchRepository) :
+        this(saved, repository, ::monotonicMillis)
+
     private val mutable = MutableStateFlow(GlobalSearchState(
         query = saved.get<String>("query").orEmpty(),
         category = saved.get<String>("category")?.let(SearchCategory::valueOf),
@@ -69,7 +76,9 @@ class GlobalSearchViewModel @Inject constructor(
     private var paginationFailed = false
 
     init {
-        viewModelScope.launch { repository.history.collect { history -> mutable.update { it.copy(history = history) } } }
+        viewModelScope.launch {
+            repository.history.collect { history -> mutable.update { it.copy(history = history) } }
+        }
         updateSearch()
     }
 
@@ -98,7 +107,7 @@ class GlobalSearchViewModel @Inject constructor(
     }
 
     fun clearHistory() {
-        viewModelScope.launch { updateHistory { repository.clearHistory() } }
+        viewModelScope.launch { mutable.updateHistory { repository.clearHistory() } }
     }
 
     fun loadOptions() {
@@ -108,8 +117,12 @@ class GlobalSearchViewModel @Inject constructor(
                 viewModelScope.launch {
                     try {
                         when (val result = repository.options(facet)) {
-                            is DomainResult.Success -> mutable.update { it.copy(options = it.options + (facet to result.value)) }
-                            is DomainResult.Failure -> mutable.update { it.copy(failedOptions = it.failedOptions + facet) }
+                            is DomainResult.Success ->
+                                mutable.update {
+                                    it.copy(options = it.options + (facet to result.value))
+                                }
+                            is DomainResult.Failure ->
+                                mutable.update { it.copy(failedOptions = it.failedOptions + facet) }
                         }
                     } finally {
                         loadingOptions.remove(facet)
@@ -150,7 +163,7 @@ class GlobalSearchViewModel @Inject constructor(
         if (request != null && (cached == null || now() - cached.savedAt >= CACHE_TTL_MS)) {
             fetch(request, remember = isNewQuery, debounce = true)
         } else if (request != null && isNewQuery) {
-            viewModelScope.launch { updateHistory { repository.rememberQuery(request.query) } }
+            viewModelScope.launch { mutable.updateHistory { repository.rememberQuery(request.query) } }
         }
     }
 
@@ -173,7 +186,7 @@ class GlobalSearchViewModel @Inject constructor(
                     mutable.update { it.copy(loading = false, paging = false, error = error) }
                 }
             }
-            if (remember) updateHistory { repository.rememberQuery(request.query) }
+            if (remember) mutable.updateHistory { repository.rememberQuery(request.query) }
         }
     }
 
@@ -198,14 +211,13 @@ class GlobalSearchViewModel @Inject constructor(
         }
     }
 
-    private fun now() = System.nanoTime() / 1_000_000
+}
 
-    private suspend fun updateHistory(operation: suspend () -> Unit) {
-        try {
-            operation()
-            mutable.update { it.copy(historyError = false) }
-        } catch (_: IOException) {
-            mutable.update { it.copy(historyError = true) }
-        }
+private suspend fun MutableStateFlow<GlobalSearchState>.updateHistory(operation: suspend () -> Unit) {
+    try {
+        operation()
+        update { it.copy(historyError = false) }
+    } catch (_: IOException) {
+        update { it.copy(historyError = true) }
     }
 }

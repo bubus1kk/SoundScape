@@ -106,7 +106,7 @@ internal class MapZoomControls {
     fun changeBy(step: Double) {
         val current = map ?: return
         val start = current.cameraPosition.zoom
-        val target = (start + step).coerceIn(current.minZoomLevel, current.maxZoomLevel)
+        val target = MapZoomRange(current.minZoomLevel, current.maxZoomLevel).step(start, step)
         if (target != start) current.animateCamera(CameraUpdateFactory.zoomTo(target), ZOOM_DURATION_MS)
     }
 
@@ -114,8 +114,7 @@ internal class MapZoomControls {
         val current = map ?: return false
         val start = current.cameraPosition
         val center = LatLng(place.coordinates.latitude, place.coordinates.longitude)
-        val zoom = start.zoom.coerceAtLeast(PLACE_ZOOM)
-            .coerceIn(current.minZoomLevel, current.maxZoomLevel)
+        val zoom = MapZoomRange(current.minZoomLevel, current.maxZoomLevel).destination(start.zoom)
         val overview = current.flightOverviewZoom(start, center)
         return try {
             isFlightOverview = true
@@ -134,14 +133,13 @@ internal class MapZoomControls {
 
     private fun update() {
         val current = map
-        canZoomIn = current != null && current.cameraPosition.zoom < current.maxZoomLevel - ZOOM_EPSILON
-        canZoomOut = current != null && current.cameraPosition.zoom > current.minZoomLevel + ZOOM_EPSILON
+        val range = current?.let { MapZoomRange(it.minZoomLevel, it.maxZoomLevel) }
+        canZoomIn = current != null && range?.canZoomIn(current.cameraPosition.zoom) == true
+        canZoomOut = current != null && range?.canZoomOut(current.cameraPosition.zoom) == true
     }
 
     private companion object {
         const val ZOOM_DURATION_MS = 250
-        const val ZOOM_EPSILON = 0.0001
-        const val PLACE_ZOOM = 12.0
         const val FLIGHT_ZOOM_OUT_MS = 400
         const val FLIGHT_PAN_MS = 600
         const val FLIGHT_ZOOM_IN_MS = 550
@@ -154,8 +152,7 @@ private fun MapLibreMap.flightOverviewZoom(start: CameraPosition, destination: L
         val bounds = LatLngBounds.Builder().include(origin).include(destination).build()
         getCameraForLatLngBounds(bounds)?.zoom?.minus(1.0)
     } else null
-    val pullBack = start.zoom - 2.0
-    return minOf(pullBack, fitZoom ?: pullBack).coerceIn(minZoomLevel, maxZoomLevel)
+    return MapZoomRange(minZoomLevel, maxZoomLevel).overview(start.zoom, fitZoom)
 }
 
 private suspend fun MapLibreMap.animateFlightStep(update: CameraUpdate, duration: Int): Boolean =
@@ -224,9 +221,7 @@ private class MapViewLifecycle(
     private var markers: MapMarkers? = null
     private var places: List<MapPlace> = emptyList()
     private var selected: MapPlace? = null
-    private var released = false
-    private var started = false
-    private var resumed = false
+    private val lifecycle = MapLifecycleState()
     private val memoryCallbacks = object : ComponentCallbacks {
         override fun onConfigurationChanged(newConfig: Configuration) = Unit
 
@@ -252,14 +247,14 @@ private class MapViewLifecycle(
         context.registerComponentCallbacks(memoryCallbacks)
         owner.lifecycle.addObserver(this)
         view.getMapAsync { ready ->
-            if (!released) {
+            if (!lifecycle.released) {
                 map = ready
                 zoom.attach(ready)
                 ready.addOnCameraIdleListener(cameraIdle)
                 ready.addOnCameraMoveStartedListener(cameraMoving)
                 ready.addOnMapClickListener(click)
                 ready.setStyle(style) { loaded ->
-                    if (!released) {
+                    if (!lifecycle.released) {
                         markers = MapMarkers(loaded, view.context, markerColor, selectedColor).also {
                             it.update(places)
                             it.select(selected)
@@ -272,33 +267,25 @@ private class MapViewLifecycle(
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        started = true
-        view.onStart()
+        lifecycle.start(view::onStart)
     }
 
     override fun onResume(owner: LifecycleOwner) {
-        resumed = true
-        view.onResume()
+        lifecycle.resume(view::onResume)
     }
 
     override fun onPause(owner: LifecycleOwner) {
-        saveState()
-        resumed = false
-        view.onPause()
+        lifecycle.pause(::saveState, view::onPause)
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        started = false
-        view.onStop()
+        lifecycle.stop(view::onStop)
     }
 
     override fun onDestroy(owner: LifecycleOwner) = release()
 
     fun release() {
-        if (released) return
-        if (resumed) onPause(owner)
-        if (started) onStop(owner)
-        released = true
+        if (!lifecycle.release({ onPause(owner) }, { onStop(owner) })) return
         owner.lifecycle.removeObserver(this)
         context.unregisterComponentCallbacks(memoryCallbacks)
         map?.let {
