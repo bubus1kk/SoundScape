@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { HttpError } from "../../functions/_shared/core.ts";
 import type { Track } from "../../functions/_shared/catalog.ts";
-import { candidateQueries, firstMatchingCandidates } from "../../functions/_shared/ai_query.ts";
 import { validateGenerated } from "../../functions/v1-generate-playlist/index.ts";
 
 const ID_1 = "123e4567-e89b-42d3-a456-426614174000";
@@ -11,38 +10,6 @@ const tracks: Track[] = [
   { id: ID_1, title: "One", artist: "A", durationMs: 120000, availability: "EXTERNAL_ONLY" },
   { id: ID_2, title: "Two", artist: "B", durationMs: 90000, availability: "IN_APP" },
 ];
-
-Deno.test("AI-01: retains original query and adds bounded music-specific alternatives", () => {
-  const queries = candidateQueries("Хочу спокойную музыку для сна");
-  assert.equal(queries[0], "Хочу спокойную музыку для сна");
-  assert.equal(queries.includes("calm"), true);
-  assert.equal(queries.includes("sleep"), true);
-  assert.equal(queries.length <= 4, true);
-});
-
-Deno.test("AI-02: explicit filters are searched before generic fallback terms", () => {
-  const queries = candidateQueries("Please make calm music for sleep", { genre: "jazz", mood: "ambient" });
-  assert.deepEqual(queries.slice(0, 3), ["Please make calm music for sleep", "jazz", "ambient"]);
-});
-
-Deno.test("AI-03: catalog search stops at the first verified candidate batch", async () => {
-  const called: string[] = [];
-  const result = await firstMatchingCandidates(["empty", "found", "never"], async q => {
-    called.push(q);
-    return q === "found" ? tracks : [];
-  });
-  assert.deepEqual(result, tracks);
-  assert.deepEqual(called, ["empty", "found"]);
-});
-
-Deno.test("AI-04: provider errors propagate instead of being hidden by fallback", async () => {
-  let calls = 0;
-  await assert.rejects(firstMatchingCandidates(["fail", "not-called"], async () => {
-    calls++;
-    throw new Error("provider error");
-  }), /provider error/);
-  assert.equal(calls, 1);
-});
 
 Deno.test("AI-05: approved AI IDs retain order and get sequential positions", () => {
   const result = validateGenerated({ title: " Chill ", description: " Verified ", items: [

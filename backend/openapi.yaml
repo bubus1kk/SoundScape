@@ -186,7 +186,7 @@ paths:
       tags: [Catalog]
       summary: Единый поиск по пяти категориям
       operationId: searchAll
-      description: Поиск по композициям, исполнителям, плейлистам, городам/местам и пользователям. Не раскрывает чужой PRIVATE/UNLISTED-контент. Жанр, настроение и только IN_APP влияют на релевантные музыкальные результаты. Гость использует publishable key; необязательный JWT позволяет видеть собственные разрешённые объекты после проверки на сервере.
+      description: Поиск по композициям, исполнителям, плейлистам, городам/местам и пользователям. Композиции из Supabase и живого поиска Audius объединяются по стабильному SoundScape ID перед пагинацией. Жанр, настроение и onlyInApp применяются к музыкальным результатам. Гость использует publishable key. Необязательный JWT позволяет видеть собственные разрешённые объекты.
       security: [{PublishableKey: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/UnifiedSearchRequest'}}}}
       responses:
@@ -203,7 +203,7 @@ paths:
       tags: [Catalog]
       summary: Найти существующие проверенные композиции
       operationId: searchTracks
-      description: 'Отдельная Edge Function: поиск через Audius с дедупликацией, только реальные provider IDs; не возвращать фиктивные внешние ссылки. В production verify_jwt=false, apikey проверяется в обработчике. JWT пользователя необязателен, но при наличии валидируется. Фильтры genreIds/moodIds опираются на связи track_genres/track_moods.'
+      description: Использует тот же музыкальный каталог, что и v1-search. Фильтры genreIds и moodIds сопоставляются с метаданными Audius и связями в Supabase. onlyInApp возвращает только записи с подтверждённой доступностью потока. Ключ Audius используется только на сервере.
       security: [{PublishableKey: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SearchTracksRequest'}}}}
       responses:
@@ -220,7 +220,7 @@ paths:
       tags: [Catalog]
       summary: Получить актуальный допустимый аудиоисточник
       operationId: resolveTrack
-      description: Возвращает временный URL для Media3 либо точную внешнюю ссылку; не проксирует аудиобайты. URL в примере явно фиктивный, не действующий аудиопоток. Права cache/download по умолчанию false до проверки. В production verify_jwt=false, apikey проверяется в обработчике. JWT пользователя необязателен, но при наличии валидируется.
+      description: Проверяет текущие метаданные Audius, ограничения доступа и начальные байты официального аудиопотока. Возвращает временный URL для Media3 либо точную внешнюю ссылку для доступной страницы композиции. Кэширование и скачивание отключены для Audius.
       security: [{PublishableKey: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ResolveTrackRequest'}}}}
       responses:
@@ -667,6 +667,7 @@ components:
         trackId: {type: string, format: uuid}
         position: {type: integer, minimum: 1}
         reason: {type: string, nullable: true}
+        availability: {type: string, enum: [IN_APP, EXTERNAL_ONLY]}
       required: [trackId, position]
     GeneratedPlaylist:
       type: object

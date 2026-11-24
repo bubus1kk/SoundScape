@@ -1,81 +1,100 @@
-// Bounded, deterministic catalog search fallback. Pure code with no provider calls.
-// Natural-language prompt is still sent intact to the AI model. This function only
-// chooses safe catalog search terms and does not fabricate track IDs or provider data.
+// Match against catalog evidence only. Terms in a title carry less weight
+// than the same terms in a track's genre or mood.
+const musicTerms = [
+  'ambient', 'chill', 'chillout', 'lofi', 'jazz', 'rock', 'pop', 'hip hop',
+  'rap', 'techno', 'house', 'classical', 'piano', 'acoustic', 'instrumental',
+  'electronic', 'electronica', 'synthwave', 'retrowave', 'downtempo',
+  'metal', 'indie', 'folk', 'funk', 'soul', 'blues', 'reggae', 'disco',
+  'calm', 'relaxing', 'meditation', 'sleep', 'study', 'focus',
+  'atmospheric', 'trance', 'dubstep', 'drum and bass', 'dnb', 'edm', 'rnb',
+  'latin', 'country', 'soundtrack', 'nature',
+];
+const situations: { pattern: RegExp; terms: string[] }[] = [
+  { pattern: /(?:ноч\p{L}*|night|midnight).*?(?:поезд\p{L}*|дорог\p{L}*|маршрут|ед[еу]\p{L}*|drive|driving|ride)|(?:поезд\p{L}*|дорог\p{L}*|маршрут|drive|driving|ride).*?(?:ноч\p{L}*|night|midnight)/u,
+    terms: ['night drive', 'night ride', 'synthwave', 'retrowave', 'downtempo', 'midnight', 'night', 'ночь', 'lofi'] },
+  { pattern: /спокойн|расслаб|тих\p{L}* вечер|уютн|неспешн|relax|calm/u,
+    terms: ['calm', 'relaxing', 'ambient', 'downtempo', 'chill', 'chillout', 'lofi', 'спокойное', 'спокойная'] },
+  { pattern: /(?:^| )(?:работ[ауые]|уч[её]б\p{L}*|сосредоточ\p{L}*|концентрац\p{L}*|focus|study)(?: |$)/u,
+    terms: ['focus', 'study', 'lofi', 'instrumental', 'ambient', 'piano', 'инструментальная'] },
+  { pattern: /медитац|(?:^| )(?:сон|сна|sleep)(?: |$)/u,
+    terms: ['meditation', 'sleep', 'ambient', 'calm'] },
+  { pattern: /(?:^| )(?:поезд\p{L}*|дорог\p{L}*|путешеств\p{L}*|road trip)(?: |$)/u,
+    terms: ['road trip', 'on the road', 'road', 'drive', 'journey', 'travel'] },
+  { pattern: /клубн\p{L}* (?:культур\p{L}*|музык\p{L}*)|танцевальн\p{L}*/u,
+    terms: ['house', 'techno', 'disco'] },
+];
+const aliases: [RegExp, string][] = [
+  [/эмбиент/u, 'ambient'], [/лоу ?фай|лофи/u, 'lofi'], [/джаз/u, 'jazz'],
+  [/электрон/u, 'electronic'], [/синтвейв/u, 'synthwave'], [/даунтемпо/u, 'downtempo'],
+  [/классик|классическ/u, 'classical'], [/фортепиано|пианино/u, 'piano'],
+  [/инструментальн/u, 'instrumental'], [/спокойн/u, 'calm'], [/медитац/u, 'meditation'],
+  [/(?:^| )рок(?: |$)/u, 'rock'], [/техно/u, 'techno'], [/хаус/u, 'house'],
+  [/хип ?хоп/u, 'hip hop'], [/рэп/u, 'rap'],
+];
 
-const stopwords = new Set([
-  'a', 'an', 'and', 'any', 'are', 'at', 'be', 'by', 'can', 'for', 'from', 'i',
-  'in', 'is', 'it', 'me', 'my', 'of', 'on', 'or', 'please', 'some', 'that', 'the',
-  'these', 'this', 'to', 'want', 'with', 'would', 'you', 'make', 'create',
-  'music', 'musical', 'song', 'songs', 'track', 'tracks', 'sound', 'sounds',
-  'playlist', 'mix', 'give', 'listen', 'listening', 'nice', 'good',
-  'в', 'во', 'для', 'и', 'или', 'из', 'к', 'мне', 'мой', 'на', 'не', 'ну', 'о',
-  'по', 'под', 'про', 'с', 'со', 'хочу', 'чтобы', 'это', 'эти', 'песни',
-  'песен', 'музыка', 'музыку', 'музыки', 'музыкальный', 'плейлист', 'трек',
-  'треки', 'подборка', 'подборку', 'что', 'нибудь', 'какой', 'сделай',
-]);
-
-const genres = new Set([
-  'ambient','atmospheric','chill','chillout','lofi','jazz','rock','pop',
-  'hiphop','rap','techno','house','trance','dubstep','drum','bass','dnb',
-  'classical','piano','acoustic','instrumental','electronic','edm',
-  'synthwave','retrowave','metal','indie','folk','funk','soul','rnb',
-  'blues','reggae','disco','latin','country','soundtrack','meditation',
-  'relaxing','calm','sleep','study','focus','nature',
-]);
-
-function canonicalToken(input: string): string {
-  const token=input.toLowerCase();
-  if (/^эмбиент/.test(token) || /^атмосферн/.test(token)) return 'ambient';
-  if (/^спокойн/.test(token) || /^расслабл/.test(token)) return 'calm';
-  if (/^джаз/.test(token)) return 'jazz';
-  if (/^рок/.test(token)) return 'rock';
-  if (/^техно/.test(token)) return 'techno';
-  if (/^хаус/.test(token)) return 'house';
-  if (/^классич/.test(token) || /^классик/.test(token)) return 'classical';
-  if (/^фортепиан/.test(token) || /^пианино/.test(token)) return 'piano';
-  if (/^электронн/.test(token)) return 'electronic';
-  if (/^рэп/.test(token) || /^реп/.test(token)) return 'rap';
-  if (/^лоу.?фай/.test(token) || /^лофи/.test(token)) return 'lofi';
-  if (/^хип.?хоп/.test(token)) return 'hiphop';
-  if (/^медитац/.test(token)) return 'meditation';
-  if (/^сон$/.test(token) || /^сна$/.test(token)) return 'sleep';
-  return token.replace(/-/g,'');
+function normalize(value: string): string {
+  return value.toLowerCase().normalize('NFKC').replaceAll('ё', 'е')
+    .replace(/\blo[ -]fi\b/g, 'lofi').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
-function tokens(value: string): string[] {
-  return (value.toLowerCase().match(/[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*/gu) ?? [])
-    .map(canonicalToken).filter(v=>v.length>=3 && !stopwords.has(v));
+function contains(value: string, term: string): boolean {
+  return term.length > 1 && ` ${value} `.includes(` ${term} `);
 }
 
-/** Searches the original phrase, then at most three targeted alternatives. */
-export function candidateQueries(
-  primary: string, options: { genre?:string; mood?:string }={}, max=4,
-): string[] {
-  const result:string[]=[];
-  const seen=new Set<string>();
-  const add=(value:string)=>{
-    const term=value.replace(/\s+/g,' ').trim().slice(0,200);
-    const key=term.toLowerCase();
-    if(term && !seen.has(key) && result.length<max){result.push(term);seen.add(key);}
-  };
-  add(primary);
-  if(options.genre) add(options.genre);
-  if(options.mood) add(options.mood);
-  const words=tokens(primary);
-  // Domain vocabulary first: avoid searching meaningless generic words ("sounds", "playlist").
-  for(const w of words){if(genres.has(w))add(w);}
-  // Last resort: search a few informative keywords rather than the entire sentence.
-  for(const w of words){if(!genres.has(w))add(w);}
-  return result;
-}
-
-/** No fallback after a provider/DB error: those errors should remain observable. */
-export async function firstMatchingCandidates<T>(
-  queries:readonly string[], search:(query:string)=>Promise<T[]>,
-):Promise<T[]> {
-  for(const query of queries){
-    const found=await search(query);
-    if(found.length) return found;
+function searchText(raw: string, infer: boolean) {
+  const phrase = normalize(raw);
+  const terms = new Set(musicTerms.filter(term => contains(phrase, term)));
+  for (const [pattern, term] of aliases) if (pattern.test(phrase)) terms.add(term);
+  if (infer) {
+    // Prefer the specific night-drive intent to the generic road-trip intent.
+    const situation = situations.find(({ pattern }) => pattern.test(phrase));
+    for (const term of situation?.terms ?? []) terms.add(term);
   }
-  return [];
+  return { phrase, terms: [...terms] };
+}
+
+export type MusicContext = { title: string; description?: string | null };
+
+export function candidateRelevance(
+  prompt: string, options: { genre: string; mood: string; context: readonly MusicContext[] },
+) {
+  const query = searchText(prompt, true);
+  const directQuery = query.phrase.replace(
+    /^(?:(?:хочу|включи|подбери|песни|треки|музык[ау]|исполнителя|please|play|songs by|music by|tracks by) )+/u, '',
+  );
+  const context = options.context.flatMap(({ title, description }) =>
+    [searchText(title, true), searchText(description ?? '', true)]);
+  const hints = [searchText(options.genre, false), searchText(options.mood, true)];
+  const intent = situations.find(({ pattern }) => pattern.test(query.phrase));
+  const locations = options.context.map(({ title }) => normalize(title));
+  const genreHints = new Set([...query.terms, ...hints.flatMap(hint => hint.terms)]);
+
+  function editorial(playlist: MusicContext, genres: string[]): number {
+    const city = normalize(playlist.title.split(':', 1)[0]);
+    if (city && locations.includes(city)) return 12;
+    const text = normalize(playlist.title + ' ' + (playlist.description ?? ''));
+    if (intent?.pattern.test(text)) return 8;
+    return genres.some(genre => {
+      const label = searchText(genre, false);
+      return [label.phrase, ...label.terms].some(term => genreHints.has(term));
+    }) ? 3 : 0;
+  }
+
+  function track(track: MusicContext & { artist: string; genres: string[]; moods: string[] }): number {
+    const title = normalize(track.title);
+    const credit = normalize(track.artist);
+    const facets = [...track.genres, ...track.moods].flatMap(value => {
+      const label = searchText(value, false);
+      return [label.phrase, ...label.terms];
+    });
+    const score = ({ phrase, terms }: ReturnType<typeof searchText>) => {
+      if (contains(title, phrase) || contains(credit, phrase) || (phrase && facets.includes(phrase))) return 12;
+      const facetMatches = terms.filter(term => facets.includes(term)).length;
+      const titleMatches = terms.filter(term => contains(title, term)).length;
+      return Math.min(facetMatches, 2) * 5 + Math.min(titleMatches, 2) * 2;
+    };
+    return 3 * score({ ...query, phrase: directQuery }) +
+      Math.max(0, ...context.map(score)) + Math.max(...hints.map(score));
+  }
+  return { track, editorial };
 }

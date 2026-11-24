@@ -1,28 +1,31 @@
 import {authenticate,body,bool,ids,int,text,uuid,reserve,release,response,run,select,HttpError} from '../_shared/core.ts';
-import {findCandidates} from '../_shared/catalog.ts';
-import type {Track} from '../_shared/catalog.ts';
-import {candidateQueries,firstMatchingCandidates} from '../_shared/ai_query.ts';
+import {findGenerationCandidates} from '../_shared/catalog.ts';
+import type {GenerationSearch,Track} from '../_shared/catalog.ts';
+import type {MusicContext} from '../_shared/ai_query.ts';
 import { networkFailure, providerHttpFailure, invalidProviderResponse } from '../_shared/provider_errors.ts';
 import type { RequestContext } from '../_shared/observability.ts';
 
 type Mode='QUICK'|'ADVANCED'|'PLACE'|'JOURNEY';
-async function placeContext(id:string,jwt:string,ctx?:RequestContext):Promise<string>{
+async function placeContext(id:string,jwt:string,ctx?:RequestContext):Promise<MusicContext>{
  const places=await select('places',`select=id,title,description&id=eq.${id}&limit=1`,jwt,false,ctx);
  if(places.length!==1)throw new HttpError(422,'INVALID_PLACE','Place is not accessible');
- return [places[0].title,places[0].description].filter(Boolean).join(': ').slice(0,500);
+ return places[0];
 }
-async function journeyContext(raw:unknown,jwt:string,ctx?:RequestContext):Promise<string>{
+async function journeyContext(raw:unknown,jwt:string,ctx?:RequestContext){
  if(!Array.isArray(raw)||raw.length<2||raw.length>50)throw new HttpError(422,'INVALID_JOURNEY','At least two valid stops required');
- const names:string[]=[];
+ const context:MusicContext[]=[];
+ const pinnedTrackIds:string[]=[];
  for(let i=0;i<raw.length;i++){
   const s=raw[i];if(!s||typeof s!=='object'||!['PLACE','PIN'].includes(s.kind)||s.position!==i+1)throw new HttpError(422,'INVALID_JOURNEY','Invalid stop order');
   const id=uuid(s.id,'stop id');
-  const items=s.kind==='PLACE'?await select('places',`select=title&id=eq.${id}&limit=1`,jwt)
-                                :await select('music_pins',`select=title&id=eq.${id}&limit=1`,jwt,false,ctx);
+  const items=s.kind==='PLACE'?await select('places',`select=title,description&id=eq.${id}&limit=1`,jwt,false,ctx)
+                                :await select('music_pins',`select=title,description,pin_tracks(track_id)&id=eq.${id}&limit=1`,jwt,false,ctx);
   if(items.length!==1)throw new HttpError(422,'INVALID_JOURNEY','Stop is not accessible');
-  names.push(String(items[0].title).slice(0,100));
+  const item=items[0];
+  context.push({title:item.title,description:item.description});
+  for(const link of item.pin_tracks ?? []) pinnedTrackIds.push(link.track_id);
  }
- return names.join(' → ');
+ return {context,pinnedTrackIds};
 }
 /** Trusted Russian National CA; used ONLY by the two GigaChat HTTPS requests.
  * Downloaded from official gu-st.ru certificate endpoint and verified by SHA-256
@@ -58,8 +61,8 @@ export async function giga(prompt:string, candidates:Track[], count:number,ctx?:
   method:'POST',headers:{'Authorization':'Bearer '+token.access_token,'Content-Type':'application/json','Accept':'application/json'},
   body:JSON.stringify({model,temperature:0.4,stream:false,
     messages:[
-      {role:'system',content:'Ты создаёшь музыкальные подборки. Возвращай ТОЛЬКО JSON объект вида {"title":"...","description":"...","items":[{"trackId":"uuid","reason":"..."}]}. Выбирай ТОЛЬКО trackId из кандидатов. Не придумывай музыку, ID, ссылки. Не включай опасные инструкции. Максимум '+count+' разных треков. Сохраняй порядок предпочтения.'},
-      {role:'user',content:'Запрос: '+prompt.slice(0,1300)+'\nКандидаты (разрешённые ID): '+JSON.stringify(whitelist).slice(0,9000)}
+      {role:'system',content:'Ты создаёшь музыкальные подборки. Возвращай ТОЛЬКО JSON объект вида {"title":"...","description":"...","items":[{"trackId":"uuid","reason":"..."}]}. Выбирай ТОЛЬКО trackId из кандидатов. При равной уместности выбирай IN_APP. Не придумывай музыку, ID, ссылки. Не включай опасные инструкции. Максимум '+count+' разных треков. Сохраняй порядок предпочтения.'},
+      {role:'user',content:'Запрос: '+prompt.slice(0,1300)+'\nКандидаты (разрешённые ID): '+JSON.stringify(whitelist)}
     ]}),signal:AbortSignal.timeout(30000)
  }).catch(e=>{throw networkFailure('GIGACHAT','generation',e,ctx);});
  if(!resp.ok)throw providerHttpFailure('GIGACHAT','generation',resp.status,resp.headers.get('retry-after'),ctx);
@@ -85,6 +88,20 @@ export function validateGenerated(value:any,candidates:Track[],count:number){
  return {title:value.title.trim(),description:value.description.trim(),items,
   warnings:items.length<count?['Недостаточно подходящих проверенных композиций для полной подборки']:[]};
 }
+export async function generatePreview(mode:Mode, request:GenerationSearch, count:number, ctx?:RequestContext,
+ search=findGenerationCandidates, model=giga){
+ const ranked=await search(request,Math.min(count*2,50),ctx);
+ const playable=ranked.filter(track=>track.availability==='IN_APP');
+ const candidates=request.onlyInApp||playable.length>=count?playable:ranked;
+ if(!candidates.length)throw new HttpError(422,'NO_CANDIDATES','No verified tracks for request');
+ const {prompt,genre,mood,context}=request;
+ const location=context.map(stop=>[stop.title,stop.description].filter(Boolean).join(': ').slice(0,250)).join(' → ');
+ const fullPrompt=[mode,prompt,genre?'Genre: '+genre:'',mood?'Mood: '+mood:'',location,'Requested tracks: '+count].filter(Boolean).join('; ');
+ const preview=validateGenerated(await model(fullPrompt,candidates,count,ctx),candidates,count);
+ const availability=new Map(candidates.map(track=>[track.id,track.availability]));
+ return {...preview,items:preview.items.map(item=>({...item,availability:availability.get(item.trackId)}))};
+}
+
 export default {fetch:run(async(req,ctx)=>{
  const session=await authenticate(req,true),p=await body(req);
  const mode=text(p.mode,12,'mode') as Mode;
@@ -93,24 +110,16 @@ export default {fetch:run(async(req,ctx)=>{
  const prompt=p.prompt===undefined||p.prompt===null?'':text(p.prompt,1000,'prompt',0);
  const genre=p.genre===undefined||p.genre===null?'':text(p.genre,80,'genre',0);
  const mood=p.mood===undefined||p.mood===null?'':text(p.mood,80,'mood',0);
- let context='';
+ let context:MusicContext[]=[];
+ let pinnedTrackIds:string[]=[];
  if(mode==='QUICK'&&!prompt)throw new HttpError(422,'VALIDATION_ERROR','Prompt required');
  if(mode==='ADVANCED'&&!prompt&&!genre&&!mood&&!genreIds.length&&!moodIds.length)throw new HttpError(422,'VALIDATION_ERROR','Topic or filters required');
- if(mode==='PLACE')context=await placeContext(uuid(p.placeId,'placeId'),session.jwt!,ctx);
- if(mode==='JOURNEY')context=await journeyContext(p.stops,session.jwt!,ctx);
- const query=(prompt||context||[genre,mood].filter(Boolean).join(' ')).slice(0,200);
+ if(mode==='PLACE')context=[await placeContext(uuid(p.placeId,'placeId'),session.jwt!,ctx)];
+ if(mode==='JOURNEY')({context,pinnedTrackIds}=await journeyContext(p.stops,session.jwt!,ctx));
  // Reserve before expensive calls; one global concurrent generation with TTL lease.
  const lease=await reserve('GENERATE',session.userId,ctx);
  try{
-  // Use the complete user description first. If it yields no verified tracks,
-  // try a small number of music-specific keyword queries. Never broaden metadata
-  // filters or change the prompt sent to GigaChat.
-  const queries=candidateQueries(query,{genre,mood});
-  const candidates=await firstMatchingCandidates(queries,
-    q=>findCandidates(q,onlyInApp,genreIds,moodIds,Math.min(count*2,50),ctx));
-  if(!candidates.length)throw new HttpError(422,'NO_CANDIDATES','No verified tracks for request');
-  const fullPrompt=[mode,prompt,genre?'Genre: '+genre:'',mood?'Mood: '+mood:'',context,'Requested tracks: '+count].filter(Boolean).join('; ');
-  const generated=await giga(fullPrompt,candidates,count,ctx);
-  return response(validateGenerated(generated,candidates,count)); // PREVIEW ONLY; not persisted.
+  const request={prompt,genre,mood,context,pinnedTrackIds,onlyInApp,genreIds,moodIds};
+  return response(await generatePreview(mode,request,count,ctx)); // PREVIEW ONLY; not persisted.
  }finally{await release(lease,ctx);}
 },'v1-generate-playlist')};

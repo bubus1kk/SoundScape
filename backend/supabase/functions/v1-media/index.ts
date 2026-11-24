@@ -1,4 +1,4 @@
-import {authenticate,body,text,uuid,reserve,rpc,sha256,run,HttpError,supabaseUrl,secretKey} from '../_shared/core.ts';
+import {authenticate,body,text,uuid,reserve,rpc,sha256,run,HttpError,supabaseUrl,privilegedHeaders} from '../_shared/core.ts';
 export default {fetch:run(async(req,ctx)=>{
  const session=await authenticate(req),p=await body(req);
  const kind=text(p.objectType,12,'objectType');if(!['PIN','EVENT','PLAYLIST','PLACE'].includes(kind))throw new HttpError(400,'VALIDATION_ERROR','Invalid objectType');
@@ -11,7 +11,7 @@ export default {fetch:run(async(req,ctx)=>{
  const asset=await rpc('edge_media_path',{p_user:session.userId,p_kind:kind,p_object:id,p_photo:photoId,p_token_hash:token?await sha256(token):null},ctx);
  if(!asset?.path)throw new HttpError(404,'NOT_FOUND','Media not found');
  const res=await fetch(supabaseUrl()+'/storage/v1/object/authenticated/soundscape-media/'+asset.path.split('/').map(encodeURIComponent).join('/'),{
-   headers:{apikey:secretKey()},signal:AbortSignal.timeout(10000)
+   headers:privilegedHeaders(),signal:AbortSignal.timeout(10000)
  }).catch(()=>{throw new HttpError(503,'STORAGE_UNAVAILABLE','Media unavailable');});
  if(!res.ok)throw new HttpError(res.status===404?404:503,'STORAGE_UNAVAILABLE','Media unavailable');
  const type=(res.headers.get('content-type')||'').split(';')[0].toLowerCase();

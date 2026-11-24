@@ -10,11 +10,13 @@ on:
       - '.github/workflows/soundscape-server-tests.yml'
       - 'backend/supabase/**'
       - 'backend/tests/postman/**'
+      - 'backend/scripts/**'
   pull_request:
     paths:
       - '.github/workflows/soundscape-server-tests.yml'
       - 'backend/supabase/**'
       - 'backend/tests/postman/**'
+      - 'backend/scripts/**'
 
 permissions:
   contents: read
@@ -25,7 +27,7 @@ concurrency:
 
 jobs:
   deno-unit:
-    name: Deno unit / 36 assertions
+    name: Deno unit and type checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -42,7 +44,10 @@ jobs:
           deno-version: '2.9.8'
 
       - name: Run Deno unit tests
-        run: deno test ./supabase/tests/unit/
+        run: deno test --allow-env=AUDIUS_API_KEY,AUDIUS_CONTENT_HOSTS ./supabase/tests/unit/
+
+      - name: Type-check Edge Functions and importer
+        run: deno check ./supabase/functions/*/index.ts ./scripts/import-audius.ts
 
   local-db-api:
     name: Local PostgreSQL (pgTAP) and negative API
@@ -72,12 +77,13 @@ jobs:
           test -f supabase/tests/database/01_schema_security_test.sql
           test -f supabase/tests/database/02_rls_visibility_test.sql
           test -f supabase/tests/database/03_constraints_test.sql
+          test -f supabase/tests/database/04_audius_catalog_test.sql
           test -f tests/postman/SoundScape_Practice11_Negative_Local.postman_collection.json
 
       - name: Start local Supabase (isolated Docker stack)
         run: supabase start
 
-      - name: Run pgTAP (52 assertions)
+      - name: Run pgTAP
         run: supabase test db
 
       - name: Install Newman

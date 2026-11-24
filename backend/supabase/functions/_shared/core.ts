@@ -125,11 +125,18 @@ export async function authenticate(req: Request, required = false): Promise<Sess
 export function publicHeaders(jwt: string | null):Record<string,string> {
   return {apikey:publishableKey(),...(jwt?{Authorization:`Bearer ${jwt}`}:{})};
 }
+
+/** Legacy service-role JWTs must also be sent as Bearer credentials to local PostgREST. */
+export function privilegedHeaders(): Record<string, string> {
+  const key = secretKey();
+  const isJwt = /^[\w-]+\.[\w-]+\.[\w-]+$/.test(key);
+  return isJwt ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+}
 // Dedicated server-side only Data API. Secret key NEVER comes from a client request.
 export async function adminRest(path: string, init: RequestInit = {}):Promise<Response> {
   const res=await fetch(supabaseUrl()+'/rest/v1/'+path,{
     ...init,
-    headers:{'apikey':secretKey(),'content-type':'application/json',...(init.headers as Record<string,string>||{})},
+    headers:{...privilegedHeaders(),'content-type':'application/json',...(init.headers as Record<string,string>||{})},
     signal:AbortSignal.timeout(9000),
   }).catch(()=>{throw new HttpError(503,'DATABASE_UNAVAILABLE','Database unavailable');});
   return res;
@@ -209,7 +216,7 @@ export async function release(lease:string|null,ctx?:RequestContext){if(lease){t
 export async function select(table:string,query:string,jwt:string|null,privileged=false,ctx?:RequestContext):Promise<any[]> {
   if(!/^[a-z_]+$/.test(table)) throw new HttpError(500,'INTERNAL_ERROR','Invalid table');
   const url=supabaseUrl()+'/rest/v1/'+table+'?'+query;
-  const res=await fetch(url,{headers:privileged?{'apikey':secretKey()}:publicHeaders(jwt),signal:AbortSignal.timeout(9000)})
+  const res=await fetch(url,{headers:privileged?privilegedHeaders():publicHeaders(jwt),signal:AbortSignal.timeout(9000)})
     .catch(()=>{logInternalFailure(ctx,'DATABASE_QUERY_ERROR',table);throw new HttpError(503,'DATABASE_UNAVAILABLE','Database unavailable');});
   if(!res.ok) {logInternalFailure(ctx,'DATABASE_QUERY_ERROR',table,res.status);throw new HttpError(503,'DATABASE_UNAVAILABLE','Database query failed');}
   const data=await res.json();return Array.isArray(data)?data:[];
