@@ -133,6 +133,15 @@ internal fun LazyListScope.searchResults(
             }
         results.isNotEmpty() -> searchPopulatedResults(state, model, offline, openProfile, playback, onTrack, image)
     }
+    if (!state.loading && state.error == null && state.results?.hasMore == true)
+        item {
+            SoundScapeButton(
+                stringResource(R.string.search_more),
+                model::loadMore,
+                Modifier.fillMaxWidth(),
+                loading = state.paging,
+            )
+        }
 }
 
 private fun LazyListScope.searchPopulatedResults(
@@ -148,15 +157,6 @@ private fun LazyListScope.searchPopulatedResults(
     if (state.loading || state.error != null || offline)
         item { SearchStatus(state, offline, model::retry) }
     searchGroups(results, state.category, model::category, openProfile, playback, onTrack, image)
-    if (!state.loading && state.error == null && state.results?.hasMore == true)
-        item {
-            SoundScapeButton(
-                stringResource(R.string.search_more),
-                model::loadMore,
-                Modifier.fillMaxWidth(),
-                loading = state.paging,
-            )
-        }
 }
 
 private fun LazyListScope.searchGroups(

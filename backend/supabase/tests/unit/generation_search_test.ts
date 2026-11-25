@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { HttpError } from "../../functions/_shared/core.ts";
 import { findGenerationCandidates, type GenerationSearch } from "../../functions/_shared/catalog.ts";
-import { generatePreview } from "../../functions/v1-generate-playlist/index.ts";
+import { generatePreview, validateGenerated } from "../../functions/v1-generate-playlist/index.ts";
 
 const request: GenerationSearch = {
   prompt: "", genre: "", mood: "", genreIds: [], moodIds: [], onlyInApp: false,
@@ -51,15 +51,13 @@ async function preview(mode: Mode, options: Partial<GenerationSearch>, expected:
     assert.equal(prompt.mode, mode);
     for (const context of options.context ?? []) assert.ok(prompt.context.some(stop => stop.title === context.title));
     assert.deepEqual(candidates.map(track => track.id), expected);
-    return { title: "Подборка", description: "Тестовый ответ", items: [
-      { trackId: unrelated.id }, { trackId: candidates[0].id },
-    ] };
+    return validateGenerated({ title: "Подборка", description: "Тестовый ответ", items: [1] },candidates,1);
   });
 }
 
 Deno.test("QUICK: «Ночная поездка» ranks editorial matches and works with untagged lo-fi tracks", async () => {
   const result = await preview("QUICK", { prompt: "Ночная поездка" }, [night.id, work.id]);
-  assert.deepEqual(result.items, [{ trackId: night.id, position: 1, reason: null, availability: "EXTERNAL_ONLY" }]);
+  assert.deepEqual(result.items, [{ trackId: night.id, position: 1, reason: "Выбор по уместности для запроса.", availability: "EXTERNAL_ONLY" }]);
   await preview("QUICK", { prompt: "Ночная поездка" }, [work.id], [work, unrelated]);
 });
 
@@ -93,13 +91,13 @@ Deno.test("preview drops tracks whose source changes while the model is selectin
     id:row.id,title:row.title,artist:"Fixture",durationMs:row.duration_ms,availability:"IN_APP" as const,
   }));
   const result=await generatePreview("QUICK",{...request,onlyInApp:true},2,undefined,
-    async()=>candidates,async()=>({
-      title:"Verified route",description:"",items:candidates.map(track=>({trackId:track.id})),
-    }),async ids=>{
+    async()=>candidates,async()=>validateGenerated({
+      title:"Verified route",description:"",items:[1,2],
+    },candidates,2),async ids=>{
       assert.deepEqual(ids,candidates.map(track=>track.id));
       return new Map([[night.id,"EXTERNAL_ONLY"],[calm.id,"IN_APP"]]);
     });
-  assert.deepEqual(result.items,[{trackId:calm.id,reason:null,position:1,availability:"IN_APP"}]);
+  assert.deepEqual(result.items,[{trackId:calm.id,reason:"Выбор по уместности для запроса.",position:1,availability:"IN_APP"}]);
   assert.equal(result.warnings.length,1);
 });
 
@@ -153,11 +151,9 @@ Deno.test("Generation prefers playable candidates and copies availability from t
   const preview = await generatePreview("QUICK", { ...request, prompt: "Ambient" }, 1, undefined,
     () => Promise.resolve([outside, inApp]), (_prompt, candidates) => {
       assert.deepEqual(candidates, [inApp]);
-      return Promise.resolve({ title: "Ambient", description: "", items: [
-        { trackId: outside.id }, { trackId: inApp.id, availability: "EXTERNAL_ONLY" },
-      ] });
+      return Promise.resolve(validateGenerated({ title: "Ambient", description: "", items: [1] },candidates,1));
     });
-  assert.deepEqual(preview.items, [{ trackId: inApp.id, position: 1, reason: null, availability: "IN_APP" }]);
+  assert.deepEqual(preview.items, [{ trackId: inApp.id, position: 1, reason: "Выбор по уместности для запроса.", availability: "IN_APP" }]);
 });
 
 Deno.test("Scans later catalog pages and uses editorial genres as hints only", async () => {

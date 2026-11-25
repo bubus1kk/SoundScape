@@ -3,6 +3,64 @@ import { intentRelevance, parseMusicIntent } from '../../functions/_shared/music
 
 const vocabulary={genres:['Synthwave','Dark Jazz','Jazz','Rock','Electronic','Lo-Fi','Ambient','Hip-Hop/Rap'],
   moods:['Peaceful','Melancholic','Energetic','Atmospheric']};
+const modelReply={kind:'MOOD',genres:['Jazz'],moods:['Peaceful'],requiredGenres:[],excludedGenres:[],target:''};
+
+for (const [prompt,kind,genre] of [
+  ['Ночной город','PLACE','Synthwave'],
+  ['Париж ночью','PLACE','Dark Jazz'],
+  ['Атмосфера ночных улиц','PLACE','Ambient'],
+  ['Музыка для поездки по городу','JOURNEY','Lo-Fi'],
+  ['Музыка как в Cyberpunk 2077','ATMOSPHERE','Electronic'],
+  ['Прогулка по пустой набережной','ACTIVITY','Jazz'],
+]) Deno.test('client mode and geographic context: '+prompt,()=>{
+  for(const mode of ['QUICK','ADVANCED'] as const){
+    const intent=parseMusicIntent({...modelReply,kind,genres:[genre]},vocabulary,{mode,contextCount:0,prompt,genre:''});
+    assert.equal(intent.kind,kind==='PLACE'||kind==='JOURNEY'?'ATMOSPHERE':kind);
+    assert.deepEqual(intent.genres,[genre]);
+  }
+});
+
+Deno.test('only validated geographic context allows PLACE or JOURNEY intent',()=>{
+  for(const [mode,contextCount] of [['PLACE',1],['JOURNEY',2]] as const){
+    const request={mode,contextCount,prompt:'Музыка в дорогу',genre:''};
+    assert.equal(parseMusicIntent({...modelReply,kind:mode},vocabulary,request).kind,mode);
+    assert.equal(parseMusicIntent({...modelReply,kind:mode},vocabulary,{...request,contextCount:0}).kind,'ATMOSPHERE');
+  }
+});
+
+for (const [prompt,excluded,unmatched] of [
+  ['Тихая прогулка, без рока','Rock','Rock'],
+  ['только не рэп','Hip-Hop/Rap','Hip Hop'],
+  ['не добавляй металл','metal','Metal'],
+  ['без жанра «shoegaze»','shoegaze','Shoegaze'],
+  ['исключи hip-hop','Hip-Hop/Rap','Rap'],
+  ['Rainy evening, without rock и hip-hop','Rock','Hip-Hop/Rap'],
+]) Deno.test('model omission cannot remove explicit exclusion: '+prompt,()=>{
+  const intent=parseMusicIntent(modelReply,vocabulary,{mode:'QUICK',contextCount:0,prompt,genre:''});
+  assert.ok(intent.excludedGenres.includes(excluded));
+  assert.equal(intentRelevance(intent,{title:'Track',artist:'Artist',genres:[unmatched],moods:['Peaceful']}),-1);
+  assert.equal(intentRelevance(intent,{title:'Track',artist:'Artist',genres:[],moods:['Peaceful']}),-1);
+  assert.ok(intentRelevance(intent,{title:'Track',artist:'Artist',genres:['Jazz'],moods:['Peaceful']})>0);
+});
+
+Deno.test('strict genres survive omission, reject conflicts and do not infer unverified musical attributes',()=>{
+  const request={mode:'QUICK' as const,contextCount:0,prompt:'только джаз',genre:''};
+  const intent=parseMusicIntent({...modelReply,genres:['Ambient']},vocabulary,request);
+  assert.deepEqual(intent.requiredGenres,['Jazz']);
+  assert.equal(intentRelevance(intent,{title:'Song',artist:'Artist',genres:['Ambient'],moods:['Peaceful']}),-1);
+  assert.throws(()=>parseMusicIntent(modelReply,vocabulary,{...request,prompt:'только джаз, но без джаза'}),
+    {code:'NO_CANDIDATES'});
+  assert.throws(()=>parseMusicIntent(modelReply,vocabulary,{...request,prompt:'only metal'}),
+    {code:'NO_CANDIDATES'});
+  assert.throws(()=>parseMusicIntent({...modelReply,bpm:120},vocabulary,request),{code:'AI_INVALID_RESULT'});
+  for(const prompt of ['Background jazz, no vocals','Только инструментальная музыка','Строго 120 BPM']) {
+    assert.throws(()=>parseMusicIntent(modelReply,vocabulary,{...request,prompt}),{code:'NO_CANDIDATES'});
+  }
+  assert.doesNotThrow(()=>parseMusicIntent(modelReply,vocabulary,
+    {...request,prompt:'Спокойная электроника без агрессивного звучания'}));
+  assert.equal(parseMusicIntent({...modelReply,kind:'TRACK',target:'No Vocals'},vocabulary,
+    {...request,prompt:'Найди композицию «No Vocals»'}).target,'No Vocals');
+});
 const cases=[
   ['Ночной город',{kind:'ATMOSPHERE',genres:['синтвейв'],moods:['атмосферное']}],
   ['Музыка для прогулки по городу поздней ночью',{kind:'ACTIVITY',genres:['электроника'],moods:['спокойная']}],

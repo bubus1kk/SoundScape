@@ -9,5 +9,6 @@ export default { fetch:run(async(req,ctx)=>{
  const limit=int(p.limit,20,1,50,'limit'),offset=int(p.offset,0,0,1000,'offset');
  await reserve('SEARCH_TRACKS',session.userId,ctx);
  const tracks=await searchCatalog(query,{genreIds,moodIds,onlyInApp},offset,limit+1,ctx);
- return response({items:tracks.slice(0,limit),limit,offset,hasMore:tracks.length>limit && offset+limit<=1000});
+ return response({items:tracks.slice(0,limit).filter(track=>track!==null),limit,offset,
+   hasMore:tracks.length>limit && offset+limit<=1000});
 },'v1-search-tracks')};

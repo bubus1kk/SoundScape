@@ -86,6 +86,33 @@ class GlobalSearchScreenTest {
         }
     }
 
+    @Test fun emptyCatalogPageCanAdvanceToTheNextSnapshotOffset() {
+        val catalog = Fixture(emptyFirstPage = true)
+        val store = ViewModelStore()
+        lateinit var model: GlobalSearchViewModel
+        compose.runOnUiThread {
+            model = GlobalSearchViewModel(SavedStateHandle(), catalog)
+            store.put("search", model)
+        }
+        try {
+            compose.setContent {
+                val state by model.state.collectAsState()
+                SoundScapeTheme {
+                    GlobalSearchScreen(state, model, offline = false, back = {}, openProfile = {}) { _, _ -> }
+                }
+            }
+            compose.onNodeWithText(text(PresentationR.string.search_hint)).performTextReplacement("Ambient")
+            compose.onNodeWithText("Ambient").performImeAction()
+            compose.waitUntil(10_000) { model.state.value.results?.hasMore == true }
+            scrollTo(text(PresentationR.string.search_more)).performClick()
+            waitForTrack(model, catalog.second.id)
+            scrollTo(catalog.second.title)
+            compose.runOnIdle { assertEquals(listOf(null to 0, null to 20), catalog.requests) }
+        } finally {
+            compose.runOnUiThread { store.clear() }
+        }
+    }
+
     private fun scrollTo(label: String): SemanticsNodeInteraction {
         compose.onNodeWithTag("global-search-list").performScrollToNode(hasText(label))
         return compose.onNodeWithText(label).assertIsDisplayed()
@@ -97,7 +124,7 @@ class GlobalSearchScreenTest {
 
     private fun text(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
 
-    private class Fixture : GlobalSearchRepository {
+    private class Fixture(private val emptyFirstPage: Boolean = false) : GlobalSearchRepository {
         val first = SearchHit(
             SearchCategory.TRACK, UUID(0, 1), "First fixture track", "Artist", null, TrackAvailability.IN_APP,
         )
@@ -113,6 +140,9 @@ class GlobalSearchScreenTest {
         override suspend fun search(request: GlobalSearch, limit: Int, offset: Int): DomainResult<Page<SearchHit>> {
             requests += request.category to offset
             error?.let { return DomainResult.Failure(it) }
+            if (emptyFirstPage) {
+                return DomainResult.Success(if (offset == 0) Page(emptyList(), true) else Page(listOf(second), false))
+            }
             return DomainResult.Success(if (offset == 0) Page(listOf(first), true) else Page(listOf(first, second), false))
         }
     }

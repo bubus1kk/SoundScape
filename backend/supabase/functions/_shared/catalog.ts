@@ -5,20 +5,26 @@ import type { AudiusTrack } from './audius.ts';
 import type { RequestContext } from './observability.ts';
 import { candidateRelevance } from './ai_query.ts';
 import type { MusicContext } from './ai_query.ts';
-import { intentRelevance, type MusicIntent } from './music_intent.ts';
+import { intentRelevance, matchesIntentGenres, type MusicIntent } from './music_intent.ts';
 export type Track = {id:string;title:string;artist:string;durationMs:number;availability:'IN_APP'|'EXTERNAL_ONLY';provider?:string;genres?:string[];moods?:string[]};
-export async function trackViews(ids:string[],ctx?:RequestContext,deadline?:AbortSignal):Promise<Track[]> {
+export async function trackViews(ids:string[],request:GenerationSearch,ctx?:RequestContext,deadline?:AbortSignal):Promise<Track[]> {
  if(!ids.length)return [];
  const rows=await select('tracks','select=id,title,duration_ms,track_artists(credit_order,artists(name)),'+
+  'track_genres(genre_id,genres(name)),track_moods(mood_id,moods(name)),'+
   'track_sources(provider,can_stream,external_url,verified_at)&id=in.('+ids.join(',')+')',null,true,ctx,deadline) as GenerationRow[];
  const now=Date.now();
  return rows.flatMap(t=>{
+  if(!matchesGenerationFacets(t,request))return [];
   const stream=t.track_sources.find(source=>freshAudiusStream(source,now));
-  const source=stream??t.track_sources.find(externalCatalogSource);
+  const source=stream??(!request.onlyInApp?t.track_sources.find(externalCatalogSource):undefined);
   if(!source)return [];
   const artist=t.track_artists.sort((a,b)=>a.credit_order-b.credit_order)
    .map(credit=>credit.artists?.name).filter(Boolean).join(', ')||'Unknown artist';
-  return [{id:t.id,title:t.title,artist,durationMs:t.duration_ms,availability:stream?'IN_APP':'EXTERNAL_ONLY',provider:source.provider}];
+  const genres=t.track_genres.flatMap(link=>link.genres?[link.genres.name]:[]);
+  const moods=t.track_moods.flatMap(link=>link.moods?[link.moods.name]:[]);
+  if(request.intent&&intentRelevance(request.intent,{title:t.title,artist,genres,moods})<0)return [];
+  return [{id:t.id,title:t.title,artist,durationMs:t.duration_ms,availability:stream?'IN_APP':'EXTERNAL_ONLY',
+    provider:source.provider,genres,moods}];
  });
 }
 /** A valid empty Audius list is different from a malformed upstream envelope. */
@@ -53,7 +59,7 @@ async function facetNames(table: 'genres' | 'moods', ids: number[], ctx?: Reques
 }
 
 async function liveTrackIds(query: string, filters: SearchFilters, ctx?: RequestContext, budget?: AbortSignal,
-  checks = newVerificationBudget(ctx)): Promise<string[]> {
+  checks = newVerificationBudget(ctx), intent?:MusicIntent): Promise<string[]> {
   const timeout = AbortSignal.timeout(21000);
   const deadline = budget ? AbortSignal.any([timeout,budget]) : timeout;
   const [genres, moods] = await Promise.all([
@@ -69,7 +75,8 @@ async function liveTrackIds(query: string, filters: SearchFilters, ctx?: Request
     !names.length || names.some(value => value.toLowerCase() === name?.toLowerCase());
   for (const raw of rows.slice(0, remoteSearchLimit)) {
     const item = audiusMetadata(raw);
-    if ('track' in item && matches(genres, item.track.genre) && matches(moods, item.track.mood))
+    if ('track' in item && matches(genres, item.track.genre) && matches(moods, item.track.mood) &&
+      (!intent || matchesIntentGenres(intent,item.track.genre?[item.track.genre]:[])))
       candidates.set(item.track.id, item);
   }
   if (!candidates.size) return [];
@@ -127,21 +134,37 @@ async function liveTrackIds(query: string, filters: SearchFilters, ctx?: Request
   return result;
 }
 
-/** Page one merged result set even when a later Audius call would return different candidates. */
+type SnapshotPage = { expiresAt:string; slots:(Track|null)[]; stale:{track_id:string;provider_track_id:string}[] };
+
+/** Null slots keep page offsets stable when a source is no longer verified. */
 export async function searchCatalog(
-  query: string, filters: SearchFilters, offset: number, limit: number, ctx?: RequestContext,
-): Promise<Track[]> {
+  query: string, filters: SearchFilters, offset: number, limit: number, ctx?: RequestContext, refreshFrom=offset,
+): Promise<(Track|null)[]> {
   const hash = await sha256(JSON.stringify([
     2, query, [...filters.genreIds].sort(), [...filters.moodIds].sort(), filters.onlyInApp,
   ]));
-  const page = { p_hash: hash, p_offset: offset, p_limit: limit };
-  const cached = await rpc('edge_catalog_search_page', page, ctx);
-  if (Array.isArray(cached)) return cached;
-  if (cached !== null) throw new HttpError(502, 'DATABASE_RESPONSE_INVALID', 'Invalid catalog page');
-  let liveIds: string[] = [];
-  let upstreamFailure: HttpError | undefined;
+  const page = { p_hash: hash, p_offset: offset, p_limit: limit,
+    p_refresh_from:refreshFrom };
   const checks=newVerificationBudget(ctx);
   const deadline=AbortSignal.timeout(21000);
+  async function readPage(items:Track[]|null=null,probeLimit=0):Promise<SnapshotPage|null>{
+    const result=await rpc('edge_catalog_search_slots',{...page,p_items:items,p_probe_limit:probeLimit},ctx);
+    if(result!==null&&(typeof result?.expiresAt!=='string'||!Array.isArray(result?.slots)||!Array.isArray(result?.stale)))
+      throw new HttpError(502,'DATABASE_RESPONSE_INVALID','Invalid catalog page');
+    return result;
+  }
+  async function refreshPage(snapshot:SnapshotPage){
+    if(!snapshot.stale.length||checks.rateLimited||deadline.aborted)return snapshot.slots;
+    const probeDeadline=AbortSignal.any([deadline,AbortSignal.timeout(4500)]);
+    await refreshExpired(snapshot.stale,checks,probeDeadline,ctx);
+    // If the snapshot expired while probing, keep the old positions for this response.
+    const updated=await readPage();
+    return updated?.expiresAt===snapshot.expiresAt?updated.slots:snapshot.slots;
+  }
+  const cached = await readPage(null,filters.onlyInApp?checks.remaining:0);
+  if(cached)return await refreshPage(cached);
+  let liveIds: string[] = [];
+  let upstreamFailure: HttpError | undefined;
   try { liveIds = await liveTrackIds(query, filters, ctx,deadline,checks); }
   catch (error) {
     if (!(error instanceof HttpError) || !providerErrors.includes(error.code)) throw error;
@@ -159,9 +182,9 @@ export async function searchCatalog(
   }, ctx);
   if (!Array.isArray(tracks)) throw new HttpError(502, 'DATABASE_RESPONSE_INVALID', 'Invalid catalog result');
   if (!tracks.length && upstreamFailure) throw upstreamFailure;
-  const persisted = await rpc('edge_catalog_search_page', { ...page, p_items: tracks }, ctx);
-  if (!Array.isArray(persisted)) throw new HttpError(502, 'DATABASE_RESPONSE_INVALID', 'Invalid catalog page');
-  return persisted;
+  const persisted = await readPage(tracks,filters.onlyInApp&&!upstreamFailure&&!checks.rateLimited?checks.remaining:0);
+  if (!persisted) throw new HttpError(502, 'DATABASE_RESPONSE_INVALID', 'Missing catalog page');
+  return await refreshPage(persisted);
 }
 
 type GenerationSource = {
@@ -185,6 +208,11 @@ export type GenerationSearch = {
   intent?: MusicIntent;
   deadline?: AbortSignal;
 };
+
+function matchesGenerationFacets(row:GenerationRow,request:GenerationSearch){
+  return (!request.genreIds.length||row.track_genres.some(link=>request.genreIds.includes(link.genre_id))) &&
+    (!request.moodIds.length||row.track_moods.some(link=>request.moodIds.includes(link.mood_id)));
+}
 
 export function verifiedExternalSource(source: GenerationSource): boolean {
   if (source.provider === 'AUDIUS') return isSafeExternalUrl(source.external_url);
@@ -214,6 +242,11 @@ async function refreshSource(trackId:string, providerId:string, deadline: AbortS
   if (deadline.aborted) return false;
   try {
     return await withAudiusProbe(providerId, async () => {
+      const [current] = await select('track_sources',
+        'select=provider,can_stream,verified_at&provider=eq.AUDIUS&track_id=eq.'+trackId+
+        '&provider_track_id=eq.'+encodeURIComponent(providerId)+'&limit=1',null,true,ctx,deadline);
+      if(!current?.can_stream || !current.verified_at)return false;
+      if(freshAudiusStream(current))return true;
       const metadata = await audiusTrack(providerId, ctx, deadline);
       const stream = 'track' in metadata
         ? await checkAudiusStream(metadata.track, metadata.restricted, ctx, deadline) : undefined;
@@ -226,6 +259,7 @@ async function refreshSource(trackId:string, providerId:string, deadline: AbortS
       return decision === true;
     }, ctx, deadline);
   } catch (error) {
+    if(deadline.aborted)return false;
     if (error instanceof HttpError && providerErrors.includes(error.code)) {
       if (error.status === 429) throw error;
       return false;
@@ -274,7 +308,8 @@ export async function findGenerationCandidates(
     const labels = (names:string[])=>names.map(name=>name.trim().toLowerCase());
     const retrieve = async () => {
       const ids = await rpc('edge_generation_track_ids',{
-        p_genres:labels(intent.genres),p_moods:labels(intent.moods),p_excluded:labels(intent.excludedGenres),
+        p_genres:labels([...new Set([...intent.genres,...(intent.requiredGenres??[])])]),
+        p_moods:labels(intent.moods),p_excluded:labels(intent.excludedGenres),
         p_genre_ids:request.genreIds,p_mood_ids:request.moodIds,p_kind:intent.kind,
         p_target:intent.target.toLowerCase(),p_context_titles:labels(request.context.map(stop=>stop.title)),
         p_pinned:request.pinnedTrackIds.slice(0,240),p_limit:240,p_only_in_app:request.onlyInApp,
@@ -283,12 +318,12 @@ export async function findGenerationCandidates(
       return ids.map((row:{id:string})=>row.id);
     };
     semanticIds = await retrieve();
-    const query = intent.target || intent.genres[0] || intent.moods[0];
+    const query = intent.target || intent.requiredGenres?.[0] || intent.genres[0] || intent.moods[0];
     if (semanticIds.length < Math.min(Math.ceil(count/2),5) && query && !request.deadline?.aborted) {
       const clock = AbortSignal.timeout(4500);
       const budget = request.deadline ? AbortSignal.any([clock,request.deadline]) : clock;
       try {
-        const live = await liveTrackIds(query,request,ctx,budget,checks);
+        const live = await liveTrackIds(query,request,ctx,budget,checks,intent);
         if (live.length) semanticIds = await retrieve();
       } catch (error) {
         if (!(error instanceof HttpError) || !providerErrors.includes(error.code) || !semanticIds.length) throw error;
@@ -305,8 +340,7 @@ export async function findGenerationCandidates(
         (ids ? '&id=in.('+ids.join(',')+')' : '') + (after ? '&id=gt.' + encodeURIComponent(after) : ''),
       null, true, ctx,request.deadline);
     for (const row of rows) {
-      if (request.genreIds.length && !row.track_genres.some(link => request.genreIds.includes(link.genre_id))) continue;
-      if (request.moodIds.length && !row.track_moods.some(link => request.moodIds.includes(link.mood_id))) continue;
+      if (!matchesGenerationFacets(row,request)) continue;
       const sources = row.track_sources.filter(source => source.verified_at);
       const stream = sources.find(source => freshAudiusStream(source));
       const expired = !stream && request.onlyInApp ? sources.find(source =>
@@ -333,7 +367,8 @@ export async function findGenerationCandidates(
       const musical = request.intent ? intentRelevance(request.intent,evidence) : relevance.track(evidence);
       if (musical < 0) continue;
       const score = (request.intent ? musical * 10 : musical) + editorial + (pinned.has(row.id) ? 20 : 0);
-      if (!score && !filtersOnly) continue;
+      if (!score && !filtersOnly && !request.intent?.requiredGenres?.length &&
+        !(hasFilters&&request.intent&&!request.intent.genres.length&&!request.intent.moods.length)) continue;
       const candidate: Ranked = { score, position, track: {
         id: row.id, title: row.title, artist: artist || 'Unknown artist', durationMs: row.duration_ms,
         availability: stream || expired ? 'IN_APP' : 'EXTERNAL_ONLY', provider: source.provider, genres, moods,

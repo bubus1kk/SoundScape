@@ -119,7 +119,9 @@ jobs:
           export SUPABASE_URL=http://127.0.0.1:54321
           export SUPABASE_PUBLISHABLE_KEY="$STAB_LOCAL_ANON_KEY"
           export SUPABASE_SECRET_KEY="$STAB_LOCAL_SECRET_KEY"
-          deno run --allow-run=deno --allow-env=SUPABASE_URL ./scripts/test-audius-workers.ts
+          deno run --allow-run=deno --allow-net=127.0.0.1:54321 \
+            --allow-env=SUPABASE_URL,SUPABASE_PUBLISHABLE_KEYS,SUPABASE_PUBLISHABLE_KEY,SUPABASE_ANON_KEY,SUPABASE_SECRET_KEYS,SUPABASE_SECRET_KEY,SUPABASE_SERVICE_ROLE_KEY \
+            ./scripts/test-audius-workers.ts
 
       - name: Install Newman
         run: npm install --global newman@6

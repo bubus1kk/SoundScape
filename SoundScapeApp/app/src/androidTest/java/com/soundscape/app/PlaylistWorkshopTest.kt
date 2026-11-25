@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -85,6 +86,8 @@ class PlaylistWorkshopTest {
         closeSoftKeyboard()
         compose.onNodeWithText("Готово").performScrollTo().performClick()
         compose.onNodeWithText("Изменить порядок").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Выше: Fantasia Blu (lofi house mix)")
+            .performScrollTo().assertIsNotEnabled()
         compose.onNodeWithContentDescription("Выше: lofi type beat").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Удалить: Fantasia Blu (lofi house mix)").performScrollTo().performClick()
         compose.onNodeWithText("Готово").performScrollTo().performClick()
