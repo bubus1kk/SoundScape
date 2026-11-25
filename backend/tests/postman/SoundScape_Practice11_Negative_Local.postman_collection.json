@@ -22,7 +22,8 @@
         "type": "text/javascript",
         "exec": [
           "const baseUrl = String(pm.variables.get(\"baseUrl\") || \"\").replace(/\\/$/, \"\");",
-          "if (baseUrl !== \"http://127.0.0.1:54321\" && baseUrl !== \"http://localhost:54321\") {",
+          "const localUrls = [\"http://127.0.0.1:54321\", \"http://localhost:54321\", \"http://127.0.0.1:56321\"];",
+          "if (!localUrls.includes(baseUrl)) {",
           "  console.error(\"BLOCKED: Practice 11 negative collection is LOCAL ONLY\");",
           "  pm.execution.skipRequest();",
           "}",

@@ -1,4 +1,4 @@
-import {authenticate,body,bool,ids,int,text,reserve,response,run,select,HttpError} from '../_shared/core.ts';
+import {authenticate,body,bool,ids,int,text,reserve,response,run,select,rpc,HttpError} from '../_shared/core.ts';
 import {searchCatalog} from '../_shared/catalog.ts';
 const CATS=['TRACK','ARTIST','PLAYLIST','PLACE','USER'];
 export default {fetch:run(async(req,ctx)=>{
@@ -24,29 +24,30 @@ export default {fetch:run(async(req,ctx)=>{
  }
  if(categories.includes('ARTIST')){
   // Genre and mood filters do not apply to artist identity (documented contract).
-  const aa=await select('artists',`select=id,name&name=ilike.${fragment}&limit=100`,session.jwt,false,ctx);
+  const aa=await select('artists',`select=id,name,track_artists!inner()&name=ilike.${fragment}&limit=100`,session.jwt,false,ctx);
   items.push(...aa.map(a=>({category:'ARTIST',id:a.id,title:a.name,subtitle:null})));
  }
  if(categories.includes('PLAYLIST')){
-  const pp=await select('playlists',`select=id,title,description,visibility&title=ilike.${fragment}&limit=100`,session.jwt,false,ctx);
-  // OnlyInApp requires every playlist track to be playable. Filter by track association server-side.
-  for(const p of pp){
-   if(genreIds.length){
-     const rows=await select('playlist_genres',`select=genre_id&playlist_id=eq.${p.id}&limit=100`,session.jwt,false,ctx);
-     if(!rows.some(r=>genreIds.includes(r.genre_id)))continue;
-   }
-   if(moodIds.length){
-     const playlistTracks=await select('playlist_tracks',`select=track_id&playlist_id=eq.${p.id}&limit=100`,session.jwt,false,ctx);
-     if(!playlistTracks.length)continue;
-     const ids=playlistTracks.map((x:any)=>x.track_id).join(',');
-     const rows=await select('track_moods',`select=mood_id&track_id=in.(${ids})&limit=100`,session.jwt,false,ctx);
-     if(!rows.some(r=>moodIds.includes(r.mood_id)))continue;
-   }
-   if(onlyInApp){const pt=await select('playlist_tracks',`select=track_id&playlist_id=eq.${p.id}&limit=100`,session.jwt,false,ctx);
-     const ts=await Promise.all(pt.map((t:any)=>select('track_sources',`select=can_stream,verified_at&track_id=eq.${t.track_id}&provider=eq.AUDIUS&can_stream=eq.true&verified_at=not.is.null&limit=1`,null,true,ctx)));
-     if(!pt.length||ts.some(arr=>!arr.length))continue;
-   }
-   items.push({category:'PLAYLIST',id:p.id,title:p.title,subtitle:p.description||null});
+  const fields=['id,title,description'];
+  if(genreIds.length)fields.push('playlist_genres(genre_id)');
+  if(moodIds.length||onlyInApp)fields.push(moodIds.length
+    ?'playlist_tracks(track_id,tracks(track_moods(mood_id)))':'playlist_tracks(track_id)');
+  const playlists=await select('playlists',`select=${fields.join(',')}&title=ilike.${fragment}&limit=100`,session.jwt,false,ctx) as {
+    id:string;title:string;description:string|null;playlist_genres?:{genre_id:number}[];
+    playlist_tracks?:{track_id:string;tracks?:{track_moods?:{mood_id:number}[]}|null}[];
+  }[];
+  const trackIds=onlyInApp?[...new Set(playlists.flatMap(p=>p.playlist_tracks?.map(link=>link.track_id)??[]))]:[];
+  const playable=new Set<string>();
+  for(let index=0;index<trackIds.length;index+=10000){
+   const rows=await rpc('edge_fresh_audius_track_ids',{p_ids:trackIds.slice(index,index+10000)},ctx);
+   for(const row of rows)playable.add(row.track_id);
+  }
+  for(const playlist of playlists){
+   if(genreIds.length&&!playlist.playlist_genres?.some(genre=>genreIds.includes(genre.genre_id)))continue;
+   const tracks=playlist.playlist_tracks??[];
+   if(moodIds.length&&!tracks.some(link=>link.tracks?.track_moods?.some(mood=>moodIds.includes(mood.mood_id))))continue;
+   if(onlyInApp&&(!tracks.length||!tracks.every(link=>playable.has(link.track_id))))continue;
+   items.push({category:'PLAYLIST',id:playlist.id,title:playlist.title,subtitle:playlist.description||null});
   }
  }
  if(categories.includes('PLACE')){

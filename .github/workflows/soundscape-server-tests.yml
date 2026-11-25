@@ -5,18 +5,20 @@ name: SoundScape / Server tests
 on:
   workflow_dispatch:
   push:
-    branches: [feat/backend]
+    branches: [feat/backend, feature/ui-realisation, develop, main]
     paths:
       - '.github/workflows/soundscape-server-tests.yml'
       - 'backend/supabase/**'
       - 'backend/tests/postman/**'
       - 'backend/scripts/**'
+      - 'backend/openapi.yaml'
   pull_request:
     paths:
       - '.github/workflows/soundscape-server-tests.yml'
       - 'backend/supabase/**'
       - 'backend/tests/postman/**'
       - 'backend/scripts/**'
+      - 'backend/openapi.yaml'
 
 permissions:
   contents: read
@@ -47,7 +49,7 @@ jobs:
         run: deno test --allow-env=AUDIUS_API_KEY,AUDIUS_CONTENT_HOSTS ./supabase/tests/unit/
 
       - name: Type-check Edge Functions and importer
-        run: deno check ./supabase/functions/*/index.ts ./scripts/import-audius.ts
+        run: deno check ./supabase/functions/*/index.ts ./scripts/*.ts ./supabase/tests/integration/
 
   local-db-api:
     name: Local PostgreSQL (pgTAP) and negative API
@@ -66,10 +68,15 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v3
         with:
-          version: latest
+          version: 3.0.0
 
       - name: Check test inputs
         run: |
@@ -85,6 +92,34 @@ jobs:
 
       - name: Run pgTAP
         run: supabase test db
+
+      - name: Run Edge handler integration tests with controlled providers
+        run: |
+          set -euo pipefail
+          docker exec supabase_db_backend psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
+            'INSERT INTO internal.audius_budget(requests_per_second,requests_per_month) VALUES (100,1000000)'
+          local_status="$(supabase status -o env)"
+          local_value() {
+            printf '%s\n' "$local_status" | sed -n "s/^$1=//p" | tr -d '"' | tail -n 1
+          }
+          export STAB_LOCAL_PORT=54321
+          export STAB_LOCAL_ANON_KEY="$(local_value ANON_KEY)"
+          export STAB_LOCAL_SERVICE_KEY="$(local_value SERVICE_ROLE_KEY)"
+          export STAB_LOCAL_SECRET_KEY="$(local_value SECRET_KEY)"
+          for value in "$STAB_LOCAL_ANON_KEY" "$STAB_LOCAL_SERVICE_KEY" "$STAB_LOCAL_SECRET_KEY"; do
+            test -n "$value"
+            echo "::add-mask::$value"
+          done
+          deno test --allow-net=127.0.0.1:54321 \
+            --allow-env=STAB_LOCAL_PORT,STAB_LOCAL_ANON_KEY,STAB_LOCAL_SERVICE_KEY,STAB_LOCAL_SECRET_KEY,SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,SUPABASE_PUBLISHABLE_KEYS,SUPABASE_SECRET_KEY,SUPABASE_SECRET_KEYS,SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,AUDIUS_API_KEY,AUDIUS_CONTENT_HOSTS,AUDIUS_OPERATION_PARALLEL,AUDIUS_OPERATION_UPDATES,GIGACHAT_AUTH_KEY,GIGACHAT_SCOPE,GIGACHAT_MODEL \
+            ./supabase/tests/integration/
+
+          docker exec supabase_db_backend psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
+            "UPDATE internal.audius_budget SET requests_per_second=6, recent='{}', month_count=0"
+          export SUPABASE_URL=http://127.0.0.1:54321
+          export SUPABASE_PUBLISHABLE_KEY="$STAB_LOCAL_ANON_KEY"
+          export SUPABASE_SECRET_KEY="$STAB_LOCAL_SECRET_KEY"
+          deno run --allow-run=deno --allow-env=SUPABASE_URL ./scripts/test-audius-workers.ts
 
       - name: Install Newman
         run: npm install --global newman@6

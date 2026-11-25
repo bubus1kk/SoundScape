@@ -1,4 +1,5 @@
-import { isSafeExternalUrl } from './core.ts';
+import { HttpError, isSafeExternalUrl, rpc } from './core.ts';
+import { logInternalFailure } from './observability.ts';
 import { invalidProviderResponse, networkFailure, providerHttpFailure } from './provider_errors.ts';
 import type { ProviderStage } from './provider_errors.ts';
 import type { RequestContext } from './observability.ts';
@@ -10,7 +11,7 @@ const missingTrack = Symbol('Audius track missing');
 
 export type AudiusTrack = {
   id: string; title: string; artist: string; durationMs: number; permalink: string;
-  genre?: string; mood?: string;
+  genre?: string; mood?: string; artistId?: string;
 };
 
 type Metadata = { track: AudiusTrack; restricted: boolean } | { reason: string };
@@ -31,6 +32,7 @@ export function audiusMetadata(x: any): Metadata {
       !Number.isInteger(durationMs) || durationMs < 1 || durationMs > 7200000 ||
       !isSafeExternalUrl(permalink)) return { reason: 'invalid_metadata' };
   const track: AudiusTrack = { id: x.id, title, artist, durationMs, permalink };
+  if (typeof x.user?.id === 'string' && trackId.test(x.user.id)) track.artistId = x.user.id;
   if (x.field_visibility?.genre !== false && typeof x.genre === 'string' && x.genre.trim())
     track.genre = x.genre.trim().slice(0, 80);
   if (x.field_visibility?.mood !== false && typeof x.mood === 'string' && x.mood.trim())
@@ -43,27 +45,74 @@ export function audiusMetadata(x: any): Metadata {
 
 function apiKey() { return Deno.env.get('AUDIUS_API_KEY'); }
 
+export function audiusOperationLimits(ctx?: RequestContext) {
+  const read = (name: string, fallback: number) => {
+    const value = ctx ? Deno.env.get(name) : undefined;
+    if (value === undefined) return fallback;
+    const limit = Number(value);
+    if (!Number.isInteger(limit) || limit < 1 || limit > fallback)
+      throw new HttpError(503,'PROVIDER_UNAVAILABLE','Invalid Audius operation limits');
+    return limit;
+  };
+  return {
+    parallel:read('AUDIUS_OPERATION_PARALLEL',3),
+    updates:read('AUDIUS_OPERATION_UPDATES',6),
+  };
+}
+
+export async function withAudiusProbe<T>(providerId: string, action: () => Promise<T>,
+  ctx?: RequestContext, deadline?: AbortSignal): Promise<T> {
+  if (!ctx) return await action();
+  const token = crypto.randomUUID();
+  const args = {p_provider_id:providerId,p_token:token};
+  const acquired = await rpc('edge_audius_lease',args,ctx,deadline);
+  if (acquired === false) throw new HttpError(429,'RATE_LIMITED','Audius verification is already in progress',1);
+  if (acquired !== true) throw new HttpError(502,'DATABASE_RESPONSE_INVALID','Invalid Audius lease response');
+  try { return await action(); }
+  finally {
+    try { await rpc('edge_audius_lease',{...args,p_release:true},ctx,AbortSignal.timeout(1500)); }
+    catch { logInternalFailure(ctx,'LEASE_RELEASE_ERROR','edge_audius_lease'); }
+  }
+}
+
 async function audiusFetch(
   url: URL, operation: ProviderStage, headers: HeadersInit, ctx?: RequestContext, deadline?: AbortSignal,
+  authenticated = true,
 ) {
   const requestHeaders = new Headers(headers);
-  const key = apiKey();
-  if (key) requestHeaders.set('x-api-key', key);
-  url.searchParams.set('app_name', 'SoundScape');
+  if (authenticated) {
+    const key = apiKey();
+    if (key) requestHeaders.set('x-api-key', key);
+    url.searchParams.set('app_name', 'SoundScape');
+  }
+  if (ctx) {
+    const budget = await rpc('edge_audius_reserve',{},ctx,deadline);
+    if (budget?.configured !== true)
+      throw new HttpError(503,'PROVIDER_UNAVAILABLE','Audius request budget is unavailable');
+    if (budget.allowed !== true)
+      throw new HttpError(429,'RATE_LIMITED','Audius request budget exhausted',budget.retryAfter);
+  }
   const timeout = AbortSignal.timeout(8000);
-  return await fetch(url, {
+  const response = await fetch(url, {
     headers: requestHeaders, redirect: 'manual', signal: deadline ? AbortSignal.any([timeout, deadline]) : timeout,
   }).catch(e => { throw networkFailure('AUDIUS', operation, e, ctx); });
+  if (ctx && response.status === 429) {
+    const limited = providerHttpFailure('AUDIUS',operation,429,response.headers.get('retry-after'),ctx);
+    await response.body?.cancel();
+    await rpc('edge_audius_reserve',{p_cooldown_seconds:limited.retryAfter ?? 1},ctx,AbortSignal.timeout(2000));
+    throw limited;
+  }
+  return response;
 }
 
 async function audiusJson(
-  path: string, params: Record<string, string | string[]>, ctx?: RequestContext,
+  path: string, params: Record<string, string | string[]>, ctx?: RequestContext, deadline?: AbortSignal,
 ): Promise<unknown> {
   const url = new URL(apiOrigin + '/v1/tracks' + path);
   for (const [key, values] of Object.entries(params))
     for (const value of Array.isArray(values) ? values : [values]) url.searchParams.append(key, value);
   const operation = path === '/search' ? 'search' : 'metadata';
-  const response = await audiusFetch(url, operation, { Accept: 'application/json' }, ctx);
+  const response = await audiusFetch(url, operation, { Accept: 'application/json' }, ctx, deadline);
   if (path !== '/search' && [404, 410].includes(response.status)) {
     await response.body?.cancel();
     return missingTrack;
@@ -78,15 +127,15 @@ async function audiusJson(
   return payload.data;
 }
 
-export async function audiusList(path: '/search' | '/trending', params: Record<string, string | string[]>, ctx?: RequestContext) {
-  const data = await audiusJson(path, params, ctx);
+export async function audiusList(path: '/search' | '/trending', params: Record<string, string | string[]>, ctx?: RequestContext, deadline?: AbortSignal) {
+  const data = await audiusJson(path, params, ctx,deadline);
   if (!Array.isArray(data)) throw invalidProviderResponse('AUDIUS', path === '/search' ? 'search' : 'metadata', ctx);
   return data;
 }
 
-export async function audiusTrack(id: string, ctx?: RequestContext): Promise<Metadata> {
+export async function audiusTrack(id: string, ctx?: RequestContext, deadline?: AbortSignal): Promise<Metadata> {
   if (!trackId.test(id)) return { reason: 'invalid_metadata' };
-  const data = await audiusJson('/' + id, {}, ctx);
+  const data = await audiusJson('/' + id, {}, ctx, deadline);
   if (data === missingTrack) return { reason: 'missing' };
   const metadata = audiusMetadata(data);
   if ('track' in metadata && metadata.track.id !== id) throw invalidProviderResponse('AUDIUS', 'metadata', ctx);
@@ -168,8 +217,7 @@ export async function probeAudiusStream(
       if (!target || hop >= 3) throw invalidProviderResponse('AUDIUS', 'stream', ctx);
       url = target;
       authenticatedRequest = false;
-      response = await fetch(url, { headers: range, redirect: 'manual', signal })
-        .catch(e => { throw networkFailure('AUDIUS', 'stream', e, ctx); });
+      response = await audiusFetch(url,'stream',range,ctx,signal,false);
       continue;
     }
     if ([200, 206].includes(response.status)) {
@@ -177,8 +225,7 @@ export async function probeAudiusStream(
         // A direct authenticated response does not establish anonymous playback.
         await response.body?.cancel();
         authenticatedRequest = false;
-        response = await fetch(url, { headers: range, redirect: 'manual', signal })
-          .catch(e => { throw networkFailure('AUDIUS', 'stream', e, ctx); });
+        response = await audiusFetch(url,'stream',range,ctx,signal,false);
         continue;
       }
       const valid = await playableBytes(response)

@@ -1,7 +1,11 @@
 package com.soundscape.app
 
 import android.os.SystemClock
+import android.util.Log
+import androidx.activity.ComponentActivity
 import androidx.lifecycle.ViewModelStore
+import androidx.media3.common.Player
+import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.soundscape.app.core.data.NetworkErrorMapper
 import com.soundscape.app.core.data.RemoteCall
@@ -107,9 +111,29 @@ class AudiusPlaybackTest {
     }
 
     private fun exercisePlayback(hit: SearchHit, missing: UUID, resolver: PlaybackSourceResolver) {
+        // API 35 requires an eligible foreground app to obtain media audio focus.
+        ActivityScenario.launch(ComponentActivity::class.java).use {
+            exerciseForegroundPlayback(hit, missing, resolver)
+        }
+    }
+
+    private fun exerciseForegroundPlayback(hit: SearchHit, missing: UUID, resolver: PlaybackSourceResolver) {
         val model = SearchPlaybackViewModel(test.targetContext, resolver)
         val store = ViewModelStore()
-        test.runOnMainSync { store.put("audius", model) }
+        val trace = mutableListOf<String>()
+        val listener = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                trace += "playWhenReady=$playWhenReady reason=$reason"
+            }
+
+            override fun onEvents(player: Player, events: Player.Events) {
+                trace += playbackState(model)
+            }
+        }
+        test.runOnMainSync {
+            store.put("audius", model)
+            model.player.addListener(listener)
+        }
         try {
             val unexpectedExternal: (java.net.URI) -> Unit = { error("Unexpected external action") }
             test.runOnMainSync { model.toggle(hit, unexpectedExternal) }
@@ -135,7 +159,24 @@ class AudiusPlaybackTest {
             waitFor("unavailable track rejected") {
                 model.state.value == (missing to SearchPlayback.Failed) && !model.player.isPlaying
             }
-        } finally { test.runOnMainSync { store.clear() } }
+        } catch (failure: Throwable) {
+            var diagnostic = ""
+            test.runOnMainSync { diagnostic = (trace + playbackState(model)).joinToString("\n") }
+            Log.e("SoundScapePlaybackTest", diagnostic)
+            throw AssertionError("${failure.message}\nMedia3 events:\n$diagnostic", failure)
+        } finally {
+            test.runOnMainSync {
+                model.player.removeListener(listener)
+                store.clear()
+            }
+        }
+    }
+
+    private fun playbackState(model: SearchPlaybackViewModel): String = with(model.player) {
+        "state=$playbackState suppression=$playbackSuppressionReason playWhenReady=$playWhenReady " +
+            "playing=$isPlaying position=$currentPosition buffered=$bufferedPosition duration=$duration " +
+            "error=${playerError?.errorCodeName} cause=${playerError?.cause?.javaClass?.simpleName} " +
+            "uiState=${model.state.value?.second}"
     }
 
     private fun writePcmFixture(file: File) {

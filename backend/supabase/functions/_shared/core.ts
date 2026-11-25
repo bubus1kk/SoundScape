@@ -134,10 +134,11 @@ export function privilegedHeaders(): Record<string, string> {
 }
 // Dedicated server-side only Data API. Secret key NEVER comes from a client request.
 export async function adminRest(path: string, init: RequestInit = {}):Promise<Response> {
+  const timeout=AbortSignal.timeout(9000);
   const res=await fetch(supabaseUrl()+'/rest/v1/'+path,{
     ...init,
     headers:{...privilegedHeaders(),'content-type':'application/json',...(init.headers as Record<string,string>||{})},
-    signal:AbortSignal.timeout(9000),
+    signal:init.signal?AbortSignal.any([timeout,init.signal]):timeout,
   }).catch(()=>{throw new HttpError(503,'DATABASE_UNAVAILABLE','Database unavailable');});
   return res;
 }
@@ -154,9 +155,9 @@ export async function parseRpcSuccess(res: Response): Promise<unknown> {
   }
 }
 
-export async function rpc(name:string,payload:Record<string,unknown>,ctx?:RequestContext):Promise<any> {
+export async function rpc(name:string,payload:Record<string,unknown>,ctx?:RequestContext,deadline?:AbortSignal):Promise<any> {
   if(!/^edge_[a-z_]+$/.test(name)) throw new HttpError(500,'INTERNAL_ERROR','Invalid RPC');
-  const res=await adminRest('rpc/'+name,{method:'POST',body:JSON.stringify(payload)});
+  const res=await adminRest('rpc/'+name,{method:'POST',body:JSON.stringify(payload),signal:deadline});
   if(!res.ok){
     const problem=await res.json().catch(()=>({}));
     // Do not leak DB internals. Map expected PostgreSQL status to public API.
@@ -201,8 +202,8 @@ export function parseQuotaResult(result: unknown, operation: string):
   }
   throw new HttpError(503,'DATABASE_UNAVAILABLE','Invalid quota response');
 }
-export async function reserve(operation:string,userId:string|null,ctx?:RequestContext):Promise<string|null> {
-  const raw=await rpc('edge_reserve_quota',{p_operation:operation,p_user:userId},ctx);
+export async function reserve(operation:string,userId:string|null,ctx?:RequestContext,deadline?:AbortSignal):Promise<string|null> {
+  const raw=await rpc('edge_reserve_quota',{p_operation:operation,p_user:userId},ctx,deadline);
   let decision:ReturnType<typeof parseQuotaResult>;
   try { decision=parseQuotaResult(raw,operation); }
   catch(e) { logInternalFailure(ctx,'QUOTA_INVALID_RESPONSE','edge_reserve_quota'); throw e; }
@@ -212,11 +213,12 @@ export async function reserve(operation:string,userId:string|null,ctx?:RequestCo
   }
   return decision.leaseId;
 }
-export async function release(lease:string|null,ctx?:RequestContext){if(lease){try {await rpc('edge_release_generation',{p_lease:lease},ctx);}catch{logInternalFailure(ctx,'LEASE_RELEASE_ERROR','edge_release_generation');}}}
-export async function select(table:string,query:string,jwt:string|null,privileged=false,ctx?:RequestContext):Promise<any[]> {
+export async function release(lease:string|null,ctx?:RequestContext){if(lease){try {await rpc('edge_release_generation',{p_lease:lease},ctx,AbortSignal.timeout(2000));}catch{logInternalFailure(ctx,'LEASE_RELEASE_ERROR','edge_release_generation');}}}
+export async function select(table:string,query:string,jwt:string|null,privileged=false,ctx?:RequestContext,deadline?:AbortSignal):Promise<any[]> {
   if(!/^[a-z_]+$/.test(table)) throw new HttpError(500,'INTERNAL_ERROR','Invalid table');
   const url=supabaseUrl()+'/rest/v1/'+table+'?'+query;
-  const res=await fetch(url,{headers:privileged?privilegedHeaders():publicHeaders(jwt),signal:AbortSignal.timeout(9000)})
+  const timeout=AbortSignal.timeout(9000);
+  const res=await fetch(url,{headers:privileged?privilegedHeaders():publicHeaders(jwt),signal:deadline?AbortSignal.any([timeout,deadline]):timeout})
     .catch(()=>{logInternalFailure(ctx,'DATABASE_QUERY_ERROR',table);throw new HttpError(503,'DATABASE_UNAVAILABLE','Database unavailable');});
   if(!res.ok) {logInternalFailure(ctx,'DATABASE_QUERY_ERROR',table,res.status);throw new HttpError(503,'DATABASE_UNAVAILABLE','Database query failed');}
   const data=await res.json();return Array.isArray(data)?data:[];

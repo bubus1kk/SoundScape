@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -447,20 +449,6 @@ class NavigationTest {
         compose.onNodeWithTag("home-feed").assertIsDisplayed()
     }
 
-    @Test fun guestCanOpenPersonalProfileAndReachRealSignInForm() {
-        ActivityScenario.launch(MainActivity::class.java).use {
-            val title = text(PresentationR.string.profile_sign_in_title)
-            compose.onNodeWithContentDescription(text(PresentationR.string.home_profile)).performClick()
-            compose.waitUntil(timeoutMillis = 10_000) {
-                compose.onAllNodes(hasText(title)).fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithText(title).assertIsDisplayed()
-            compose.onNodeWithText(text(PresentationR.string.profile_sign_in)).performClick()
-            compose.onNodeWithContentDescription(text(PresentationR.string.profile_email)).assertIsDisplayed()
-            compose.onNodeWithContentDescription(text(PresentationR.string.profile_password)).assertIsDisplayed()
-        }
-    }
-
     @Test fun narrowPersonalProfileWithLargeTextKeepsBothActionsAndLogoutReachable() {
         val profile = UserProfile(UUID.randomUUID(), "u_${"abcd".repeat(10)}")
         compose.setContent {
@@ -496,4 +484,28 @@ class NavigationTest {
         compose.onNodeWithText(text(PresentationR.string.home_city_playlist_unavailable)).assertIsDisplayed()
         compose.onNodeWithText(text(PresentationR.string.home_city_no_playlist)).assertDoesNotExist()
     }
+}
+
+class GuestProfileNavigationTest {
+    @get:Rule val compose = createEmptyComposeRule()
+
+    @Test fun guestCanOpenPersonalProfileAndReachRealSignInForm() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            val title = text(PresentationR.string.profile_sign_in_title)
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasTestTag("home-feed")).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithContentDescription(text(PresentationR.string.home_profile))
+                .assertIsDisplayed().performClick()
+            compose.waitUntil(timeoutMillis = 10_000) {
+                compose.onAllNodes(hasText(title)).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText(title).assertIsDisplayed()
+            compose.onNodeWithText(text(PresentationR.string.profile_sign_in)).performClick()
+            compose.onNodeWithContentDescription(text(PresentationR.string.profile_email)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(text(PresentationR.string.profile_password)).assertIsDisplayed()
+        }
+    }
+
+    private fun text(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
 }

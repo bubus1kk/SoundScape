@@ -8,17 +8,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
@@ -72,17 +75,18 @@ class PlaylistWorkshopTest {
         closeSoftKeyboard()
         compose.onNodeWithText("Сгенерировать плейлист").performClick()
         waitFor("Результат генерации")
-        waitFor("1. Fantasia Blu (lofi house mix)")
+        waitFor("1. Fantasia Blu (lofi house mix)", scroll = true)
         assertEquals(1, fixture.generations)
         assertEquals("Ночная поездка", (fixture.request as GenerationRequest.Quick).prompt)
         screenshot("SS15-fixture")
-        compose.onNodeWithText("Изменить").performClick()
-        compose.onNodeWithText("Название плейлиста").performTextReplacement("Изменённая подборка")
-        compose.onNodeWithText("Описание").performTextReplacement("Описание после редактирования")
-        compose.onNodeWithText("Готово").performClick()
-        compose.onNodeWithText("Изменить порядок").performClick()
-        compose.onNodeWithContentDescription("Выше: lofi type beat").performClick()
-        compose.onNodeWithContentDescription("Удалить: Fantasia Blu (lofi house mix)").performClick()
+        compose.onNodeWithText("Изменить").performScrollTo().performClick()
+        compose.onNodeWithText("Название плейлиста").performScrollTo().performTextReplacement("Изменённая подборка")
+        compose.onNodeWithText("Описание").performScrollTo().performTextReplacement("Описание после редактирования")
+        closeSoftKeyboard()
+        compose.onNodeWithText("Готово").performScrollTo().performClick()
+        compose.onNodeWithText("Изменить порядок").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Выше: lofi type beat").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Удалить: Fantasia Blu (lofi house mix)").performScrollTo().performClick()
         compose.onNodeWithText("Готово").performScrollTo().performClick()
         compose.onNodeWithText("Добавить из каталога").performScrollTo().performClick()
         compose.onNodeWithText("Поиск по названию или исполнителю").performTextReplacement("Love me")
@@ -120,30 +124,6 @@ class PlaylistWorkshopTest {
         assertEquals(listOf(fixture.first, fixture.extra.id), fixture.received?.trackIds)
         assertEquals(1, fixture.generations)
         compose.runOnIdle { store.clear() }
-    }
-
-    @Test fun opensGeneratorFromHomeAndRestoresPromptAfterActivityRecreation() {
-        ActivityScenario.launch(MainActivity::class.java).use { activity ->
-            waitFor("Создать плейлист")
-            compose.onNodeWithText("Создать плейлист").performClick()
-            waitFor("Генератор плейлистов")
-            compose.onNodeWithText("Твой запрос *").performScrollTo().performTextReplacement("Мелодии для прогулки")
-            closeSoftKeyboard()
-            compose.onNodeWithText("Расширенный").performScrollTo().performClick()
-            waitFor("Расширенный запрос")
-            compose.onNodeWithText("По месту").performScrollTo().performClick()
-            waitFor("Музыка по месту")
-            compose.onNodeWithText("Выбрать место").performScrollTo().performClick()
-            waitFor("Название места")
-            compose.onNodeWithTag("workshop-lookup-done").performClick()
-            compose.onNodeWithText("По маршруту").performScrollTo().performClick()
-            waitFor("Музыка по маршруту")
-            compose.onNodeWithText("Быстрый").performScrollTo().performClick()
-            activity.recreate()
-            waitFor("Генератор плейлистов")
-            waitFor("Мелодии для прогулки")
-            screenshot("SS14-app")
-        }
     }
 
     @Test fun capturesGeneratorVisualStatesWithoutProductionCalls() {
@@ -216,19 +196,11 @@ class PlaylistWorkshopTest {
         compose.runOnIdle { store.clear() }
     }
 
-    private fun waitFor(label: String) {
+    private fun waitFor(label: String, scroll: Boolean = false) {
         compose.waitUntil(8_000) { compose.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText(label).assertIsDisplayed()
-    }
-
-    private fun screenshot(name: String) {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val image = instrumentation.uiAutomation.takeScreenshot()
-        if (image != null) {
-            File(instrumentation.targetContext.cacheDir, "$name.png").outputStream().use {
-                image.compress(Bitmap.CompressFormat.PNG, 100, it)
-            }
-        }
+        val node = compose.onNodeWithText(label)
+        if (scroll) node.performScrollTo()
+        node.assertIsDisplayed()
     }
 
     private class Fixture : ProfileSession, PlaylistGenerator, PlaylistRepository, GlobalSearchRepository, TrackMetadataReader {
@@ -293,5 +265,52 @@ class PlaylistWorkshopTest {
             val track = tracks.getValue(it)
             TrackMetadata(it, track.title, track.artist, track.duration.inWholeMilliseconds)
         })
+    }
+}
+
+class PlaylistWorkshopNavigationTest {
+    // MainActivity is the only activity hosting Compose and receiving the injected touches.
+    @get:Rule val compose = createEmptyComposeRule()
+
+    @Test fun opensGeneratorFromHomeAndRestoresPromptAfterActivityRecreation() {
+        ActivityScenario.launch(MainActivity::class.java).use { activity ->
+            compose.waitUntil(8_000) {
+                compose.onAllNodes(hasTestTag("home-feed")).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithTag("home-feed").performScrollToNode(hasText("Создать плейлист"))
+            compose.onNodeWithText("Создать плейлист").assertIsDisplayed().performClick()
+            waitFor("Генератор плейлистов")
+            compose.onNodeWithText("Твой запрос *").performScrollTo().performTextReplacement("Мелодии для прогулки")
+            closeSoftKeyboard()
+            compose.onNodeWithText("Расширенный").performScrollTo().performClick()
+            waitFor("Расширенный запрос")
+            compose.onNodeWithText("По месту").performScrollTo().performClick()
+            waitFor("Музыка по месту")
+            compose.onNodeWithText("Выбрать место").performScrollTo().performClick()
+            waitFor("Название места")
+            compose.onNodeWithTag("workshop-lookup-done").performClick()
+            compose.onNodeWithText("По маршруту").performScrollTo().performClick()
+            waitFor("Музыка по маршруту")
+            compose.onNodeWithText("Быстрый").performScrollTo().performClick()
+            activity.recreate()
+            waitFor("Генератор плейлистов")
+            waitFor("Мелодии для прогулки")
+            screenshot("SS14-app")
+        }
+    }
+
+    private fun waitFor(label: String) {
+        compose.waitUntil(8_000) { compose.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(label).assertIsDisplayed()
+    }
+}
+
+private fun screenshot(name: String) {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val image = instrumentation.uiAutomation.takeScreenshot()
+    if (image != null) {
+        File(instrumentation.targetContext.cacheDir, "$name.png").outputStream().use {
+            image.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
     }
 }

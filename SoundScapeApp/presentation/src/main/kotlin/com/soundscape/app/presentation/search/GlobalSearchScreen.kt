@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -75,7 +76,8 @@ fun GlobalSearchScreen(
     Column(Modifier.fillMaxSize().imePadding().background(colors.background)) {
         ProfileHeader(R.string.search_title, back, compact = true)
         SearchInput(state, model::query, model::category)
-        LazyColumn(state = list, contentPadding = PaddingValues(spacing.space16),
+        LazyColumn(modifier = Modifier.testTag("global-search-list"), state = list,
+            contentPadding = PaddingValues(spacing.space16),
             verticalArrangement = Arrangement.spacedBy(spacing.space8)) {
             if (state.query.isBlank()) {
                 searchHistory(state, model)

@@ -1,6 +1,7 @@
-import { audiusList, audiusMetadata, probeAudiusStream } from '../supabase/functions/_shared/audius.ts';
+import { audiusList, audiusMetadata, probeAudiusStream, withAudiusProbe } from '../supabase/functions/_shared/audius.ts';
 import type { AudiusTrack } from '../supabase/functions/_shared/audius.ts';
 import { HttpError, rpc } from '../supabase/functions/_shared/core.ts';
+import { newRequestContext } from '../supabase/functions/_shared/observability.ts';
 
 const genres = ['Ambient', 'Classical', 'Jazz', 'Rock', 'Hip-Hop/Rap', 'House', 'Drum & Bass', 'Reggae'];
 const maxPerGenre = 16;
@@ -23,6 +24,7 @@ async function providerCall<T>(request: () => Promise<T>): Promise<T> {
 }
 
 async function collect() {
+  const ctx=newRequestContext('import-audius');
   const sources: { url: string; returned: number; error?: string }[] = [];
   const seen = new Set<string>();
   const confirmed: Confirmed[] = [];
@@ -38,7 +40,7 @@ async function collect() {
     };
     sources.push(source);
     let items;
-    try { items = await providerCall(() => audiusList('/trending', params)); }
+    try { items = await providerCall(() => audiusList('/trending', params,ctx)); }
     catch (error) {
       source.error = error instanceof HttpError ? error.code : 'request_failed';
       stopped ||= error instanceof HttpError && error.status === 429;
@@ -60,7 +62,8 @@ async function collect() {
       }
       checked++;
       try {
-        const stream = await providerCall(() => probeAudiusStream(metadata.track));
+        const stream = await providerCall(() => withAudiusProbe(metadata.track.id,
+          ()=>probeAudiusStream(metadata.track,ctx),ctx));
         if ('url' in stream) confirmed.push({ ...metadata.track, canStream: true });
         else rejected.push({ id, reason: stream.reason });
       } catch (error) {

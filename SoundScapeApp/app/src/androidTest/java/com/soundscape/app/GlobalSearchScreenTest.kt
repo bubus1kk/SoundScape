@@ -3,10 +3,15 @@ package com.soundscape.app
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
@@ -52,20 +57,24 @@ class GlobalSearchScreenTest {
                 }
             }
             compose.onNodeWithText(text(PresentationR.string.search_hint)).performTextReplacement("Ambient")
-            waitFor(catalog.first.title)
-            compose.onNodeWithText(text(PresentationR.string.search_play_track)).performClick()
+            compose.onNodeWithText("Ambient").performImeAction()
+            waitForTrack(model, catalog.first.id)
+            scrollTo(text(PresentationR.string.search_play_track)).performClick()
             compose.runOnIdle { assertEquals(listOf(catalog.first.id), opened) }
-            compose.onNodeWithText(text(PresentationR.string.search_more)).performClick()
-            waitFor(catalog.second.title)
-            compose.onNodeWithText(catalog.first.title).assertIsDisplayed()
-            compose.onNodeWithText(text(PresentationR.string.search_open_track)).assertIsDisplayed()
+            scrollTo(text(PresentationR.string.search_more)).performClick()
+            waitForTrack(model, catalog.second.id)
+            scrollTo(catalog.first.title)
+            scrollTo(catalog.second.title)
+            scrollTo(text(PresentationR.string.search_open_track))
 
             compose.runOnIdle { catalog.error = DomainError.Network }
-            compose.onNodeWithText(text(PresentationR.string.search_tracks)).performClick()
-            waitFor(text(PresentationR.string.search_offline))
+            compose.onNodeWithText(text(PresentationR.string.search_tracks)).performScrollTo().performClick()
+            compose.waitUntil(10_000) { model.state.value.error == DomainError.Network }
+            scrollTo(text(PresentationR.string.search_offline))
             compose.runOnIdle { catalog.error = null }
-            compose.onNodeWithText(text(PresentationR.string.search_retry)).performClick()
-            waitFor(catalog.first.title)
+            scrollTo(text(PresentationR.string.search_retry)).performClick()
+            waitForTrack(model, catalog.first.id)
+            scrollTo(catalog.first.title)
             compose.runOnIdle {
                 assertEquals(
                     listOf(null to 0, null to 20, SearchCategory.TRACK to 0, SearchCategory.TRACK to 0),
@@ -77,8 +86,13 @@ class GlobalSearchScreenTest {
         }
     }
 
-    private fun waitFor(label: String) {
-        compose.waitUntil(10_000) { compose.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty() }
+    private fun scrollTo(label: String): SemanticsNodeInteraction {
+        compose.onNodeWithTag("global-search-list").performScrollToNode(hasText(label))
+        return compose.onNodeWithText(label).assertIsDisplayed()
+    }
+
+    private fun waitForTrack(model: GlobalSearchViewModel, id: UUID) {
+        compose.waitUntil(10_000) { model.state.value.results?.items?.any { it.id == id } == true }
     }
 
     private fun text(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)

@@ -48,8 +48,8 @@ async function preview(mode: Mode, options: Partial<GenerationSearch>, expected:
       return catalog;
     });
   return await generatePreview(mode, { ...request, ...options }, 1, undefined, search, async (prompt, candidates) => {
-    assert.ok(prompt.startsWith(mode));
-    for (const context of options.context ?? []) assert.ok(prompt.includes(context.title));
+    assert.equal(prompt.mode, mode);
+    for (const context of options.context ?? []) assert.ok(prompt.context.some(stop => stop.title === context.title));
     assert.deepEqual(candidates.map(track => track.id), expected);
     return { title: "Подборка", description: "Тестовый ответ", items: [
       { trackId: unrelated.id }, { trackId: candidates[0].id },
@@ -64,7 +64,9 @@ Deno.test("QUICK: «Ночная поездка» ranks editorial matches and wo
 });
 
 Deno.test("ADVANCED: «Спокойный вечер» respects genre, mood and streaming filters", async () => {
-  const inApp = { ...calm, track_sources: [{ ...verified, provider: "AUDIUS", can_stream: true }] };
+  const inApp = { ...calm, track_sources: [{
+    ...verified, provider: "AUDIUS", can_stream: true, verified_at: new Date().toISOString(),
+  }] };
   await preview("ADVANCED", {
     prompt: "Спокойный вечер", genreIds: [2], moodIds: [4], onlyInApp: true,
   }, [calm.id], [inApp, { ...inApp, id: paris.id, track_moods: [] }, { ...calm, id: work.id }, night]);
@@ -84,6 +86,21 @@ Deno.test("QUICK: a direct artist request matches the credited artist", async ()
     track_artists: [{ credit_order: 1, artists: { name: "Burial" } }],
   };
   await preview("QUICK", { prompt: "Хочу песни Burial" }, [artist.id], [artist, unrelated]);
+});
+
+Deno.test("preview drops tracks whose source changes while the model is selecting", async () => {
+  const candidates = [night, calm].map(row=>({
+    id:row.id,title:row.title,artist:"Fixture",durationMs:row.duration_ms,availability:"IN_APP" as const,
+  }));
+  const result=await generatePreview("QUICK",{...request,onlyInApp:true},2,undefined,
+    async()=>candidates,async()=>({
+      title:"Verified route",description:"",items:candidates.map(track=>({trackId:track.id})),
+    }),async ids=>{
+      assert.deepEqual(ids,candidates.map(track=>track.id));
+      return new Map([[night.id,"EXTERNAL_ONLY"],[calm.id,"IN_APP"]]);
+    });
+  assert.deepEqual(result.items,[{trackId:calm.id,reason:null,position:1,availability:"IN_APP"}]);
+  assert.equal(result.warnings.length,1);
 });
 
 Deno.test("PLACE: uses the city editorial playlist with an optional prompt present", async () => {
