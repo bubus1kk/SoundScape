@@ -1,5 +1,4 @@
-# SoundScape practice 11 — LOCAL CI only.
-# The workflow is a local draft. It never links to or deploys to the hosted Supabase project.
+# Uses the disposable Supabase stack created on the runner.
 name: SoundScape / Server tests
 
 on:
@@ -24,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: soundscape-server-tests-${{ github.workflow }}-${{ github.ref }}
+  group: soundscape-server-tests-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -39,6 +38,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
@@ -51,6 +52,16 @@ jobs:
       - name: Type-check Edge Functions and importer
         run: deno check ./supabase/functions/*/index.ts ./scripts/*.ts ./supabase/tests/integration/
 
+      - name: Set up Python for OpenAPI validation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate OpenAPI
+        run: |
+          python -m pip install 'openapi-spec-validator==0.7.2'
+          python -m openapi_spec_validator openapi.yaml
+
   local-db-api:
     name: Local PostgreSQL (pgTAP) and negative API
     runs-on: ubuntu-latest
@@ -62,6 +73,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -85,10 +98,25 @@ jobs:
           test -f supabase/tests/database/02_rls_visibility_test.sql
           test -f supabase/tests/database/03_constraints_test.sql
           test -f supabase/tests/database/04_audius_catalog_test.sql
+          test -f supabase/tests/database/08_be02_contracts_test.sql
+          test -f supabase/tests/database/09_be02_close_test.sql
+          test -f supabase/tests/integration/be02_http_test.ts
           test -f tests/postman/SoundScape_Practice11_Negative_Local.postman_collection.json
 
       - name: Start local Supabase (isolated Docker stack)
-        run: supabase start
+        run: supabase start > "${RUNNER_TEMP}/soundscape-supabase-start.log" 2>&1
+
+      - name: Verify all migrations applied on the clean database
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(supabase/migrations/*.sql)
+          test "${#files[@]}" -ge 18
+          expected="$(printf '%s\n' "${files[@]##*/}" | cut -d_ -f1 | LC_ALL=C sort)"
+          applied="$(docker exec supabase_db_backend psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c 'select version from supabase_migrations.schema_migrations order by version')"
+          diff -u <(printf '%s\n' "$expected") <(printf '%s\n' "$applied")
+          echo "Applied ${#files[@]} local migrations"
 
       - name: Run pgTAP
         run: supabase test db
@@ -102,17 +130,33 @@ jobs:
           local_value() {
             printf '%s\n' "$local_status" | sed -n "s/^$1=//p" | tr -d '"' | tail -n 1
           }
+          test "$(local_value API_URL)" = 'http://127.0.0.1:54321'
           export STAB_LOCAL_PORT=54321
           export STAB_LOCAL_ANON_KEY="$(local_value ANON_KEY)"
           export STAB_LOCAL_SERVICE_KEY="$(local_value SERVICE_ROLE_KEY)"
           export STAB_LOCAL_SECRET_KEY="$(local_value SECRET_KEY)"
-          for value in "$STAB_LOCAL_ANON_KEY" "$STAB_LOCAL_SERVICE_KEY" "$STAB_LOCAL_SECRET_KEY"; do
+          export BE02_LOCAL_PORT=54321
+          export BE02_LOCAL_MAIL_PORT=54324
+          export BE02_LOCAL_ANON_KEY="$STAB_LOCAL_ANON_KEY"
+          export BE02_LOCAL_SERVICE_KEY="$STAB_LOCAL_SERVICE_KEY"
+          export BE02_LOCAL_JWT_SECRET="$(local_value JWT_SECRET)"
+          for value in "$STAB_LOCAL_ANON_KEY" "$STAB_LOCAL_SERVICE_KEY" "$STAB_LOCAL_SECRET_KEY" "$BE02_LOCAL_JWT_SECRET"; do
             test -n "$value"
             echo "::add-mask::$value"
           done
-          deno test --allow-net=127.0.0.1:54321 \
-            --allow-env=STAB_LOCAL_PORT,STAB_LOCAL_ANON_KEY,STAB_LOCAL_SERVICE_KEY,STAB_LOCAL_SECRET_KEY,SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,SUPABASE_PUBLISHABLE_KEYS,SUPABASE_SECRET_KEY,SUPABASE_SECRET_KEYS,SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,AUDIUS_API_KEY,AUDIUS_CONTENT_HOSTS,AUDIUS_OPERATION_PARALLEL,AUDIUS_OPERATION_UPDATES,GIGACHAT_AUTH_KEY,GIGACHAT_SCOPE,GIGACHAT_MODEL \
+          deno test --junit-path="${RUNNER_TEMP}/soundscape-deno-integration.xml" \
+            --allow-net=127.0.0.1:54321,127.0.0.1:54324 \
+            --allow-env=STAB_LOCAL_PORT,STAB_LOCAL_ANON_KEY,STAB_LOCAL_SERVICE_KEY,STAB_LOCAL_SECRET_KEY,BE02_LOCAL_PORT,BE02_LOCAL_MAIL_PORT,BE02_LOCAL_ANON_KEY,BE02_LOCAL_SERVICE_KEY,BE02_LOCAL_JWT_SECRET,SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,SUPABASE_PUBLISHABLE_KEYS,SUPABASE_SECRET_KEY,SUPABASE_SECRET_KEYS,SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,AUDIUS_API_KEY,AUDIUS_CONTENT_HOSTS,AUDIUS_OPERATION_PARALLEL,AUDIUS_OPERATION_UPDATES,GIGACHAT_AUTH_KEY,GIGACHAT_SCOPE,GIGACHAT_MODEL \
             ./supabase/tests/integration/
+          python3 - "${RUNNER_TEMP}/soundscape-deno-integration.xml" <<'PY'
+          import sys
+          from xml.etree import ElementTree
+
+          cases = ElementTree.parse(sys.argv[1]).findall('.//testcase')
+          if len(cases) < 6 or any(case.find('skipped') is not None for case in cases):
+              raise SystemExit('Expected at least six integration tests with no skips')
+          print(f'Executed {len(cases)} integration tests')
+          PY
 
           docker exec supabase_db_backend psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
             "UPDATE internal.audius_budget SET requests_per_second=6, recent='{}', month_count=0"
@@ -174,6 +218,7 @@ jobs:
           check_edge v1-open-share '{"token":"short"}' 400
           check_edge v1-manage-share '{}' 401
           check_edge v1-media '{"objectType":"INVALID"}' 400
+          check_edge v1-delete-account '{"confirm":true}' 401
 
           newman run 'tests/postman/SoundScape_Practice11_Negative_Local.postman_collection.json' \
             --env-var 'baseUrl=http://127.0.0.1:54321' \
@@ -202,9 +247,8 @@ jobs:
       - name: Report local Edge logs when test job fails
         if: failure()
         run: |
-          edge_container="$(docker ps -a --format '{{.Names}}' | grep '^supabase_edge_runtime_' | head -n 1 || true)"
-          if [[ -n "${edge_container}" ]]; then
-            docker logs --tail 100 "${edge_container}" || true
+          if docker inspect supabase_edge_runtime_backend >/dev/null 2>&1; then
+            docker logs --tail 100 supabase_edge_runtime_backend || true
           else
             echo 'Local Edge Runtime container not found.'
           fi

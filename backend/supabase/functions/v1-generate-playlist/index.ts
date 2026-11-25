@@ -13,6 +13,15 @@ async function placeContext(id:string,jwt:string,ctx:RequestContext|undefined,de
  if(places.length!==1)throw new HttpError(422,'INVALID_PLACE','Place is not accessible');
  return places[0];
 }
+export async function pinContext(id:string,jwt:string,ctx:RequestContext|undefined,deadline:AbortSignal,
+ read:typeof select=select){
+ const pins=await read('music_pins',
+  `select=title,description,pin_tracks(track_id)&id=eq.${id}&visibility=eq.PUBLIC&limit=1`,
+  jwt,false,ctx,deadline);
+ if(pins.length!==1)throw new HttpError(422,'INVALID_PLACE','Music pin is not public');
+ const {title,description,pin_tracks}=pins[0];
+ return {context:[{title,description}],pinnedTrackIds:(pin_tracks??[]).map((link:{track_id:string})=>link.track_id)};
+}
 async function journeyContext(raw:unknown,jwt:string,ctx:RequestContext|undefined,deadline:AbortSignal){
  if(!Array.isArray(raw)||raw.length<2||raw.length>50)throw new HttpError(422,'INVALID_JOURNEY','At least two valid stops required');
  const stops=raw.map((stop,index)=>{
@@ -226,7 +235,13 @@ export default {fetch:run(async(req,ctx)=>{
  let pinnedTrackIds:string[]=[];
  if(mode==='QUICK'&&!prompt)throw new HttpError(422,'VALIDATION_ERROR','Prompt required');
  if(mode==='ADVANCED'&&!prompt&&!genre&&!mood&&!genreIds.length&&!moodIds.length)throw new HttpError(422,'VALIDATION_ERROR','Topic or filters required');
- if(mode==='PLACE')context=[await placeContext(uuid(p.placeId,'placeId'),session.jwt!,ctx,deadline)];
+ if(mode==='PLACE'){
+  if((p.placeId===undefined)===(p.musicPinId===undefined))
+   throw new HttpError(422,'INVALID_PLACE','Provide exactly one placeId or musicPinId');
+  if(p.musicPinId!==undefined)
+   ({context,pinnedTrackIds}=await pinContext(uuid(p.musicPinId,'musicPinId'),session.jwt!,ctx,deadline));
+  else context=[await placeContext(uuid(p.placeId,'placeId'),session.jwt!,ctx,deadline)];
+ }
  if(mode==='JOURNEY')({context,pinnedTrackIds}=await journeyContext(p.stops,session.jwt!,ctx,deadline));
  // Reserve before expensive calls; one global concurrent generation with TTL lease.
  const lease=await reserve('GENERATE',session.userId,ctx,deadline);

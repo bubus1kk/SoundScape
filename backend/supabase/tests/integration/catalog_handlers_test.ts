@@ -61,7 +61,12 @@ for (const keyKind of ['current', 'legacy'] as const) Deno.test(`catalog and Edg
       }
       if (url.pathname.endsWith('/rpc/edge_reserve_quota') &&
           JSON.parse(String(init?.body)).p_operation === 'GENERATE') generationReservations++;
-      return realFetch(input, init);
+      try {
+        return await realFetch(input, init);
+      } catch (error) {
+        console.warn('Local catalog fixture request failed', url.pathname, error instanceof Error ? error.name : 'unknown');
+        throw error;
+      }
     }
     if (url.hostname === 'api.audius.co') {
       if (!url.pathname.endsWith('/search')&&!url.pathname.endsWith('/stream')) {
@@ -325,6 +330,16 @@ for (const keyKind of ['current', 'legacy'] as const) Deno.test(`catalog and Edg
     assert.equal(generationReservations,beforeHidden);
     await invoke(generatePlaylist,{...placeRequest,placeId:publicPlace},200,ownerToken);
     assert.deepEqual(modelInput?.context,[{title,description:'Published atmosphere'}]);
+    const beforePrivatePlace=generationReservations;
+    for(const musicPinId of [privatePin, unlistedPin, crypto.randomUUID()]){
+      await invoke(generatePlaylist,{...placeRequest,musicPinId},422,ownerToken);
+    }
+    await invoke(generatePlaylist,{...placeRequest,placeId:publicPlace,musicPinId:secondPin},422,ownerToken);
+    await invoke(generatePlaylist,placeRequest,422,ownerToken);
+    assert.equal(generationReservations,beforePrivatePlace);
+    await invoke(generatePlaylist,{...placeRequest,musicPinId:secondPin},200,otherToken);
+    assert.deepEqual(modelInput?.context,[{title,description:'Вторая остановка'}]);
+    assert.ok(!JSON.stringify(modelInput).includes(secondPin));
     const [facet]=await select('genres','select=id&name=eq.'+encodeURIComponent(fixtureGenre),null,true);
     const advanced={mode:'ADVANCED',prompt:'Только '+fixtureGenre,genreIds:[facet.id],onlyInApp:true,count:1};
     const advancedResult=await invoke(generatePlaylist,advanced,200,ownerToken);

@@ -1,18 +1,18 @@
 openapi: 3.0.3
 info:
   title: SoundScape — серверные HTTP-контракты
-  version: 1.3.0
+  version: 1.4.1
   description: |
-    Контракт HTTP API SoundScape (Supabase/PostgreSQL/PostGIS/Auth/Storage/Edge). Облако развёрнуто: 7 миграций, 17 RPC, 7 Edge Functions. Проверены Audius, GigaChat, авторизация, валидация, единые ошибки, логи и HTTP 429;
+    Контракт HTTP API SoundScape (Supabase/PostgreSQL/PostGIS/Auth/Storage/Edge). Спецификация включает локальные изменения BE-02. Доступность каждой операции в облаке зависит от применённых миграций и развёрнутых функций.
 
-    RPC: POST /rest/v1/rpc/*; Content-Type: application/json; один безымянный аргумент jsonb, тело — исходный camelCase JSON. Гостевые вызовы требуют заголовок apikey (Supabase publishable key). Для личных данных дополнительно нужен Authorization: Bearer <access JWT>; права проверяются через JWT/RLS. Edge Functions опубликованы с verify_jwt=false, а ключ и необходимый JWT проверяются обработчиками.
+    RPC принимает POST /rest/v1/rpc/* с Content-Type application/json и исходным camelCase JSON в теле. Гостевые вызовы требуют apikey. Для личных операций USER, EDITOR и ADMIN передают Authorization с действующим JWT. Сервер проверяет сессию и права. API редакционного управления описывается отдельно.
 
     GENERATE: максимум 5 попыток на пользователя и 50 на проект в сутки UTC; считаются также неуспешные попытки после резервирования квоты, сброс в 00:00 UTC. Маршруты имеют бизнес-версию v1; info.version — версия документа.
 servers:
 - url: https://spgawlqdkzoxgrncunxg.supabase.co
-  description: Развёрнутый SoundScape — production Supabase (проверен по HTTPS).
+  description: Существующий облачный SoundScape. Изменения BE-02 требуют отдельного развёртывания.
 - url: http://127.0.0.1:54321
-  description: Локальный Supabase CLI; для Edge Functions требуется запущенный functions serve.
+  description: Локальный Supabase CLI со включённым Edge Runtime.
 tags:
 - name: Geography
 - name: Playlists
@@ -22,7 +22,301 @@ tags:
 - name: Catalog
 - name: AI
 - name: Sharing
+- name: Auth
+- name: Profiles
+- name: Social
 paths:
+  /rest/v1/rpc/get_my_profile:
+    post:
+      tags: [Profiles]
+      summary: Получить собственный профиль
+      operationId: get_my_profile
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EmptyObject'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/OwnProfile'}}}}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/update_my_profile:
+    post:
+      tags: [Profiles]
+      summary: Изменить username или аватар
+      operationId: update_my_profile
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/UpdateMyProfile'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/OwnProfile'}}}}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '409': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/get_public_profile:
+    post:
+      tags: [Profiles]
+      summary: Получить публичный профиль по UUID
+      operationId: get_public_profile
+      security: [{PublishableKey: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProfileId'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/PublicProfile'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/list_public_profile_items:
+    post:
+      tags: [Profiles]
+      summary: Получить только публичные материалы профиля
+      operationId: list_public_profile_items
+      security: [{PublishableKey: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PublicProfileItemsRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/PublicProfileItemsPage'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/social_state:
+    post:
+      tags: [Social]
+      summary: Прочитать или установить состояние социального действия
+      operationId: social_state
+      security: [{PublishableKey: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SocialStateRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/SocialState'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/list_my_collection:
+    post:
+      tags: [Social]
+      summary: Получить личное избранное или сохранённые плейлисты
+      operationId: list_my_collection
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MyCollectionRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/MyCollectionPage'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/list_my_music_pins:
+    post:
+      tags: [Pins]
+      summary: Список собственных музыкальных отметок всех режимов видимости
+      operationId: list_my_music_pins
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OffsetPageRequest'}}}}
+      responses:
+        '200': {description: Страница по дате изменения и UUID, content: {application/json: {schema: {$ref: '#/components/schemas/MusicPinPage'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/copy_public_playlist:
+    post:
+      tags: [Playlists]
+      summary: Создать независимую приватную копию чужого плейлиста
+      operationId: copy_public_playlist
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CopyPlaylistRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/PlaylistDetail'}}}}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '409': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /functions/v1/v1-delete-account:
+    post:
+      tags: [Auth]
+      summary: Удалить свой аккаунт и связанные данные
+      operationId: deleteAccount
+      description: Обрабатывает до 100 файлов за вызов. При 202 клиент может повторить запрос с действующей сессией. Служебная обработка продолжает сохранённую операцию после завершения сессии. После удаления прежние сессии недействительны для Data API, Edge и Storage.
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/DeleteAccountRequest'}}}}
+      responses:
+        '200': {description: Аккаунт удалён, content: {application/json: {schema: {$ref: '#/components/schemas/DeleteAccountResult'}}}}
+        '202': {description: Удаление ожидает следующей попытки, content: {application/json: {schema: {$ref: '#/components/schemas/DeleteAccountResult'}}}}
+        '400': {$ref: '#/components/responses/EdgeError'}
+        '401': {$ref: '#/components/responses/EdgeError'}
+        '422': {$ref: '#/components/responses/EdgeError'}
+        '502': {$ref: '#/components/responses/EdgeError'}
+        '503': {$ref: '#/components/responses/EdgeError'}
+  /share/{objectType}/{objectId}:
+    servers:
+    - url: http://127.0.0.1:54321/functions/v1/v1-open-share
+      description: Прямой локальный путь для проверки маршрута.
+    - url: https://{shareHost}
+      description: Внешний HTTPS-хостинг после согласования домена и настройки прокси.
+      variables:
+        shareHost: {default: example.invalid}
+    parameters:
+    - {in: path, name: objectType, required: true, schema: {$ref: '#/components/schemas/ShareKind'}}
+    - {in: path, name: objectId, required: true, schema: {type: string, format: uuid}}
+    get:
+      tags: [Sharing]
+      summary: Открыть страницу обмена на настроенном HTTPS-домене
+      description: Хостинг направляет GET и POST на v1-open-share. Секрет UNLISTED передаётся в URL-фрагменте и извлекается страницей для POST.
+      operationId: shareWebFallback
+      security: []
+      responses:
+        '200': {description: Страница SoundScape, content: {text/html: {schema: {type: string}}}}
+        '400': {$ref: '#/components/responses/EdgeError'}
+        '404': {$ref: '#/components/responses/EdgeError'}
+        '503': {$ref: '#/components/responses/EdgeError'}
+    post:
+      tags: [Sharing]
+      summary: Разрешить объект для веб-страницы обмена
+      description: Клиент передаёт objectType и objectId из пути в теле. UNLISTED дополнительно требует token.
+      operationId: resolveShareWebFallback
+      security: [{PublishableKey: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TargetedShareRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/ShareResult'}}}}
+        '400': {$ref: '#/components/responses/EdgeError'}
+        '401': {$ref: '#/components/responses/EdgeError'}
+        '404': {$ref: '#/components/responses/EdgeError'}
+        '429': {$ref: '#/components/responses/EdgeError'}
+        '503': {$ref: '#/components/responses/EdgeError'}
+  /auth/v1/signup:
+    post:
+      tags: [Auth]
+      summary: Регистрация email и пароля
+      operationId: signup
+      description: Тестовый стенд требует подтверждения email через локальную почту.
+      security: [{PublishableKey: []}]
+      parameters:
+      - {in: query, name: redirect_to, schema: {type: string, format: uri}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AuthEmailPassword'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/AuthSignup'}}}}
+        '400': {$ref: '#/components/responses/AuthError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/AuthError'}
+        '422': {$ref: '#/components/responses/AuthError'}
+        '429': {$ref: '#/components/responses/AuthError'}
+        '500': {$ref: '#/components/responses/AuthError'}
+  /auth/v1/recover:
+    post:
+      tags: [Auth]
+      summary: Отправить ссылку для восстановления пароля
+      operationId: recoverPassword
+      description: Ответ сохраняет приватность существования аккаунта.
+      security: [{PublishableKey: []}]
+      parameters:
+      - {in: query, name: redirect_to, schema: {type: string, format: uri}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AuthEmail'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EmptyObject'}}}}
+        '400': {$ref: '#/components/responses/AuthError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/AuthError'}
+        '422': {$ref: '#/components/responses/AuthError'}
+        '429': {$ref: '#/components/responses/AuthError'}
+        '500': {$ref: '#/components/responses/AuthError'}
+  /auth/v1/verify:
+    post:
+      tags: [Auth]
+      summary: Подтвердить email или код восстановления
+      operationId: verifyAuthOtp
+      description: В почтовом сценарии Android может получить токены через разрешённый redirect.
+      security: [{PublishableKey: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AuthVerify'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/AuthSession'}}}}
+        '400': {$ref: '#/components/responses/AuthError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/AuthError'}
+        '422': {$ref: '#/components/responses/AuthError'}
+        '429': {$ref: '#/components/responses/AuthError'}
+        '500': {$ref: '#/components/responses/AuthError'}
+  /auth/v1/token:
+    post:
+      tags: [Auth]
+      summary: Войти по email и паролю или обменять токен сессии
+      operationId: exchangeAuthToken
+      description: PKCE применяется при обмене кода из почтового потока Supabase Auth. Поля тела зависят от grant_type.
+      security: [{PublishableKey: []}]
+      parameters:
+      - {in: query, name: grant_type, required: true, schema: {type: string, enum: [password, refresh_token, pkce]}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AuthTokenRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/AuthSession'}}}}
+        '400': {$ref: '#/components/responses/AuthError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/AuthError'}
+        '422': {$ref: '#/components/responses/AuthError'}
+        '429': {$ref: '#/components/responses/AuthError'}
+        '500': {$ref: '#/components/responses/AuthError'}
+  /auth/v1/logout:
+    post:
+      tags: [Auth]
+      summary: Завершить сессию Supabase Auth
+      operationId: logout
+      description: После завершения локальный клиент удаляет сохранённые токены.
+      security: [{PublishableKey: [], UserJwt: []}]
+      parameters:
+      - {in: query, name: scope, schema: {type: string, enum: [global, local, others], default: global}}
+      responses:
+        '204': {description: Сессия завершена}
+        '400': {$ref: '#/components/responses/AuthError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/AuthError'}
+        '422': {$ref: '#/components/responses/AuthError'}
+        '429': {$ref: '#/components/responses/AuthError'}
+        '500': {$ref: '#/components/responses/AuthError'}
+  /auth/v1/user:
+    get:
+      tags: [Auth]
+      summary: Получить данные собственной учётной записи Auth
+      operationId: getAuthUser
+      security: [{PublishableKey: [], UserJwt: []}]
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/AuthUser'}}}}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/AuthError'}
+    put:
+      tags: [Auth]
+      summary: Задать пароль в сессии восстановления
+      operationId: updateAuthPassword
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AuthNewPassword'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/AuthUser'}}}}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '422': {$ref: '#/components/responses/AuthError'}
+  /storage/v1/object/soundscape-media/{objectPath}:
+    parameters:
+    - {in: path, name: objectPath, required: true, schema: {type: string}, description: 'Путь с сегментами users/<uid>/<filename>; редакторы используют editorial/<filename>.'}
+    post:
+      tags: [Sharing]
+      summary: Загрузить изображение в закрытый bucket
+      description: JPEG, PNG и WebP до 10485760 байт. Для замены загружается файл с новым именем и меняется ссылка объекта.
+      operationId: uploadMedia
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody:
+        required: true
+        content:
+          image/jpeg: {schema: {type: string, format: binary}}
+          image/png: {schema: {type: string, format: binary}}
+          image/webp: {schema: {type: string, format: binary}}
+      responses:
+        '200': {description: Файл загружен, content: {application/json: {schema: {type: object, properties: {Key: {type: string}}}}}}
+        '400': {description: 'Ошибка пути, MIME или файл уже существует'}
+        '401': {description: Сессия отсутствует или недействительна}
+        '403': {description: Недостаточно прав}
+        '413': {description: Превышен размер}
+    delete:
+      tags: [Sharing]
+      summary: Удалить собственную незакреплённую загрузку
+      description: Для уже привязанного изображения сначала измените родительский объект и используйте действие CLEANUP.
+      operationId: deleteUnattachedMedia
+      security: [{PublishableKey: [], UserJwt: []}]
+      responses:
+        '200': {description: Storage обработал запрос}
+        '401': {description: Сессия отсутствует или недействительна}
+        '403': {description: Недостаточно прав}
+        '404': {description: Объект недоступен}
   /rest/v1/rpc/get_visible_places:
     post:
       tags: [Geography]
@@ -254,9 +548,9 @@ paths:
   /functions/v1/v1-open-share:
     post:
       tags: [Sharing]
-      summary: Открыть UNLISTED-материал по секретному токену
+      summary: Открыть PUBLIC или UNLISTED-материал
       operationId: openShare
-      description: Только действующий токен; хранить в БД исключительно хеш токена. Выдавать ограниченное представление объекта с соблюдением правил доступа к медиа. Отзыв немедленно блокирует последующие запросы. В production verify_jwt=false, apikey проверяется в обработчике; JWT пользователя необязателен, но при наличии валидируется. Дополнительно проверяются expires_at и revoked_at токена.
+      description: PUBLIC использует идентификатор и тип. Для UNLISTED используется действующий токен. Переданный тип и UUID должны совпадать с целью токена. JWT необязателен и проверяется при наличии.
       security: [{PublishableKey: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OpenShareRequest'}}}}
       responses:
@@ -403,18 +697,27 @@ paths:
       tags: [Sharing]
       summary: Защищённая выдача изображений
       operationId: getMedia
-      description: 'При успешном запросе возвращает бинарное изображение, Cache-Control: no-store. Не выдаёт прямой URL к Storage.'
+      description: 'Медиа выдаётся с Cache-Control no-store. Действие CLEANUP требует JWT и повторяется до processed=0 или временной ошибки.'
       security: [{PublishableKey: []}]
       parameters:
       - in: header
         name: X-SoundScape-Share-Token
         required: false
         schema: {type: string, minLength: 32, maxLength: 256}
-      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MediaRequest'}}}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - {$ref: '#/components/schemas/MediaRequest'}
+              - {$ref: '#/components/schemas/CleanupMediaRequest'}
       responses:
         '200':
-          description: Изображение
+          description: Изображение или число обработанных файлов для CLEANUP
           content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CleanupMediaResult'}
             image/png:
               schema: {type: string, format: binary}
             image/jpeg:
@@ -607,6 +910,8 @@ components:
     TravelEventDetail:
       type: object
       properties:
+        mapLatitude: {type: number, nullable: true, description: Координата для карты в ответе списка.}
+        mapLongitude: {type: number, nullable: true, description: Координата для карты в ответе списка.}
         id: {type: string, format: uuid}
         ownerId: {type: string, format: uuid}
         title: {type: string}
@@ -650,6 +955,10 @@ components:
     JourneyDetail:
       type: object
       properties:
+        durationMs: {type: integer, format: int64, minimum: 0}
+        inAppDurationMs: {type: integer, format: int64, minimum: 0}
+        routeStatus: {type: string, enum: [READY, NEEDS_EDIT], description: При менее чем двух доступных остановках маршрут виден владельцу для редактирования.}
+        canGenerate: {type: boolean, description: Для генерации требуется как минимум две остановки с публичным контекстом.}
         id: {type: string, format: uuid}
         ownerId: {type: string, format: uuid}
         title: {type: string}
@@ -658,7 +967,6 @@ components:
         stops:
           type: array
           items: {$ref: '#/components/schemas/JourneyStop'}
-          minItems: 2
         revision: {type: integer, minimum: 1}
       required: [id, ownerId, title, visibility, stops, revision]
     GeneratedItem:
@@ -702,7 +1010,7 @@ components:
       properties:
         objectType:
           type: string
-          enum: [PLAYLIST, MUSIC_PIN, TRAVEL_EVENT, JOURNEY]
+          enum: [PLAYLIST, MUSIC_PIN, TRAVEL_EVENT, JOURNEY, PROFILE]
         id: {type: string, format: uuid}
         title: {type: string}
         payload:
@@ -753,6 +1061,7 @@ components:
     SavePlaylistRequest:
       type: object
       properties:
+        idempotencyKey: {$ref: '#/components/schemas/IdempotencyKey'}
         playlistId: {type: string, description: 'Необязательный стабильный UUID, генерируемый Android до первой отправки. При обновлении обязателен вместе с expectedRevision.', format: uuid}
         title: {type: string, minLength: 1, maxLength: 150}
         description: {type: string, maxLength: 2000, nullable: true}
@@ -777,7 +1086,7 @@ components:
           maxItems: 30
           description: Необязательные тематические теги плейлиста.
       required: [title, visibility, trackIds]
-      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении передаются UUID и expectedRevision >=1. При повторе создания с тем же UUID сервер возвращает конфликт 409, не перезаписывая объект.
+      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении передаются UUID и expectedRevision >=1. При повторе с тем же ключом и телом возвращается исходный ответ. Создание с уже занятым UUID без совпадающей квитанции даёт 409.
       oneOf:
       - not:
           required: [expectedRevision]
@@ -785,12 +1094,14 @@ components:
     DeleteObjectRequest:
       type: object
       properties:
+        idempotencyKey: {$ref: '#/components/schemas/IdempotencyKey'}
         id: {type: string, format: uuid}
         expectedRevision: {type: integer, minimum: 1}
       required: [id, expectedRevision]
     SaveMusicPinRequest:
       type: object
       properties:
+        idempotencyKey: {$ref: '#/components/schemas/IdempotencyKey'}
         id: {type: string, description: 'Необязательный стабильный UUID, генерируемый Android до первой отправки. При обновлении обязателен вместе с expectedRevision.', format: uuid}
         title: {type: string, minLength: 1, maxLength: 150}
         latitude: {type: number, minimum: -90, maximum: 90}
@@ -809,7 +1120,7 @@ components:
         expectedRevision: {type: integer, minimum: 1}
         visitDate: {type: string, format: date, nullable: true, description: Необязательная дата посещения музыкальной отметки.}
       required: [title, latitude, longitude, visibility, trackIds]
-      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении передаются UUID и expectedRevision >=1. При повторе создания с тем же UUID сервер возвращает конфликт 409, не перезаписывая объект.
+      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении передаются UUID и expectedRevision >=1. При повторе с тем же ключом и телом возвращается исходный ответ. Создание с уже занятым UUID без совпадающей квитанции даёт 409.
       oneOf:
       - not:
           required: [expectedRevision]
@@ -817,6 +1128,7 @@ components:
     SaveTravelEventRequest:
       type: object
       properties:
+        idempotencyKey: {$ref: '#/components/schemas/IdempotencyKey'}
         id: {type: string, description: 'Необязательный стабильный UUID, генерируемый Android до первой отправки. При обновлении обязателен вместе с expectedRevision.', format: uuid}
         musicPinId: {type: string, description: Необязательная связь с отметкой., format: uuid, nullable: true}
         title: {type: string, minLength: 1, maxLength: 150}
@@ -837,7 +1149,7 @@ components:
         latitude: {type: number, format: double, minimum: -90, maximum: 90, nullable: true, description: 'Широта точки дневника, заполняется вместе с longitude.'}
         longitude: {type: number, format: double, minimum: -180, maximum: 180, nullable: true, description: 'Долгота точки дневника, заполняется вместе с latitude.'}
       required: [title, eventDate, trackIds]
-      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении передаются UUID и expectedRevision >=1. При повторе создания с тем же UUID сервер возвращает конфликт 409, не перезаписывая объект.
+      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении передаются UUID и expectedRevision >=1. При повторе с тем же ключом и телом возвращается исходный ответ. Создание с уже занятым UUID без совпадающей квитанции даёт 409.
       oneOf:
       - not:
           required: [expectedRevision]
@@ -845,11 +1157,16 @@ components:
     ListTravelEventsRequest:
       type: object
       properties:
+        dateFrom: {type: string, format: date}
+        dateTo: {type: string, format: date}
+        locationQuery: {type: string, maxLength: 150, description: Подстрока названия места без учёта регистра.}
+        mapOnly: {type: boolean, default: false, description: Только записи с доступными координатами.}
         limit: {type: integer, minimum: 1, maximum: 100, default: 20}
         offset: {type: integer, minimum: 0, default: 0}
     SaveJourneyRequest:
       type: object
       properties:
+        idempotencyKey: {$ref: '#/components/schemas/IdempotencyKey'}
         id: {type: string, description: 'Необязательный стабильный UUID, генерируемый Android до первой отправки. При обновлении обязателен вместе с expectedRevision.', format: uuid}
         title: {type: string, minLength: 1, maxLength: 150}
         playlistId: {type: string, description: Может быть опущен до сохранения плейлиста., format: uuid, nullable: true}
@@ -861,7 +1178,7 @@ components:
           maxItems: 50
         expectedRevision: {type: integer, minimum: 1}
       required: [title, visibility, stops]
-      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении передаются UUID и expectedRevision >=1. При повторе создания с тем же UUID сервер возвращает конфликт 409, не перезаписывая объект.
+      description: При создании допустим клиентский UUID (рекомендуется); expectedRevision не передаётся. При обновлении передаются UUID и expectedRevision >=1. При повторе с тем же ключом и телом возвращается исходный ответ. Создание с уже занятым UUID без совпадающей квитанции даёт 409.
       oneOf:
       - not:
           required: [expectedRevision]
@@ -904,6 +1221,7 @@ components:
         count: {type: integer, minimum: 1, maximum: 50, default: 10}
         onlyInApp: {type: boolean, default: false}
         placeId: {type: string, format: uuid}
+        musicPinId: {type: string, format: uuid, description: Публичная отметка для режима PLACE.}
         stops:
           type: array
           items: {$ref: '#/components/schemas/JourneyStop'}
@@ -921,12 +1239,18 @@ components:
           maxItems: 20
           description: Фильтр по настроениям из moods.id (smallint).
       required: [mode, count]
-      description: Режим QUICK требует prompt; ADVANCED — тему или жанр/настроение; PLACE требует placeId, JOURNEY требует минимум две stops. Условные правила проверяются сервером.
+      description: Режим QUICK требует prompt; ADVANCED — тему или жанр/настроение; PLACE требует ровно один из placeId и musicPinId, JOURNEY требует минимум две stops. Условные правила проверяются сервером.
     OpenShareRequest:
-      type: object
-      properties:
-        token: {type: string, minLength: 32, maxLength: 256}
-      required: [token]
+      anyOf:
+      - type: object
+        properties:
+          token: {type: string, minLength: 32, maxLength: 256, writeOnly: true}
+        required: [token]
+        not:
+          anyOf:
+          - required: [objectType]
+          - required: [objectId]
+      - {$ref: '#/components/schemas/TargetedShareRequest'}
     UnifiedSearchRequest:
       type: object
       description: Общий поиск по пяти категориям; фильтры жанров и настроений относятся к музыкальным сущностям.
@@ -1019,18 +1343,228 @@ components:
       description: CREATE требует objectType/objectId; REVOKE требует shareId. Сервер проводит проверку владельца.
     ManageShareResponse:
       type: object
-      additionalProperties: true
-      description: 'CREATE: shareId, token (выдаётся только раз), objectType, objectId, expiresAt. REVOKE: revoked=true.'
+      properties:
+        shareId: {type: string, format: uuid}
+        token: {type: string, description: Выдаётся при создании.}
+        objectType: {$ref: '#/components/schemas/ShareKind'}
+        objectId: {type: string, format: uuid}
+        expiresAt: {type: string, format: date-time, nullable: true}
+        routePath: {type: string, example: '/share/PLAYLIST/550e8400-e29b-41d4-a716-446655440000#token'}
+        revoked: {type: boolean}
     MediaRequest:
       type: object
       properties:
         objectType:
           type: string
-          enum: [PIN, EVENT, PLAYLIST, PLACE]
+          enum: [PIN, EVENT, PLAYLIST, PLACE, PROFILE]
         objectId: {type: string, format: uuid}
         photoId: {type: string, format: uuid}
       required: [objectType, objectId]
-      description: Для PIN и EVENT обязателен photoId; для PLAYLIST и PLACE запрещён. Секрет UNLISTED — в X-SoundScape-Share-Token.
+      description: Для PIN и EVENT обязателен photoId; для PLAYLIST, PLACE и PROFILE запрещён. Секрет UNLISTED — в X-SoundScape-Share-Token.
+    EmptyObject:
+      type: object
+    IdempotencyKey:
+      type: string
+      format: uuid
+      description: UUID операции в пределах аккаунта; одинаковый метод и тело возвращают исходный ответ. Повторное использование для другого тела или метода даёт 409 IDEMPOTENCY_KEY_REUSED.
+    ShareKind:
+      type: string
+      enum: [PLAYLIST, MUSIC_PIN, TRAVEL_EVENT, JOURNEY, PROFILE]
+    TargetedShareRequest:
+      type: object
+      required: [objectType, objectId]
+      properties:
+        objectType: {$ref: '#/components/schemas/ShareKind'}
+        objectId: {type: string, format: uuid}
+        token: {type: string, minLength: 32, maxLength: 256, writeOnly: true}
+    DeleteAccountRequest:
+      type: object
+      required: [confirm]
+      properties:
+        confirm: {type: boolean, enum: [true]}
+      additionalProperties: false
+    DeleteAccountResult:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [PENDING, DELETED]}
+    ProfileId:
+      type: object
+      required: [profileId]
+      properties:
+        profileId: {type: string, format: uuid}
+    OwnProfile:
+      type: object
+      required: [id, username, role, avatarPath, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        role: {type: string, enum: [USER, EDITOR, ADMIN]}
+        avatarPath: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+    PublicProfile:
+      type: object
+      required: [id, username, hasAvatar]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        hasAvatar: {type: boolean}
+    UpdateMyProfile:
+      type: object
+      properties:
+        username: {type: string, minLength: 1, maxLength: 40}
+        avatarPath: {type: string, nullable: true}
+      minProperties: 1
+      additionalProperties: false
+    PublicProfileItemsRequest:
+      type: object
+      required: [profileId, kind]
+      properties:
+        profileId: {type: string, format: uuid}
+        kind: {type: string, enum: [PLAYLIST, MUSIC_PIN, TRAVEL_EVENT, JOURNEY]}
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+        offset: {type: integer, minimum: 0, default: 0}
+    PublicProfileItem:
+      type: object
+      required: [id, title, kind]
+      properties:
+        id: {type: string, format: uuid}
+        title: {type: string}
+        kind: {$ref: '#/components/schemas/ShareKind'}
+    OffsetPageRequest:
+      type: object
+      properties:
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+        offset: {type: integer, minimum: 0, default: 0}
+    MusicPinPage:
+      type: object
+      required: [items, limit, offset, hasMore]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/MusicPinDetail'}
+        limit: {type: integer}
+        offset: {type: integer}
+        hasMore: {type: boolean}
+    PublicProfileItemsPage:
+      type: object
+      required: [items, limit, offset, hasMore]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/PublicProfileItem'}
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+        offset: {type: integer, minimum: 0, default: 0}
+        hasMore: {type: boolean}
+    MyCollectionRequest:
+      type: object
+      required: [kind]
+      properties:
+        kind: {type: string, enum: [FAVORITE, SAVED_PLAYLIST]}
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+        offset: {type: integer, minimum: 0, default: 0}
+    MyCollectionPage:
+      type: object
+      required: [items, limit, offset, hasMore]
+      properties:
+        items:
+          type: array
+          items: {oneOf: [{$ref: '#/components/schemas/TrackView'}, {$ref: '#/components/schemas/PlaylistSummary'}]}
+        limit: {type: integer, minimum: 1, maximum: 100, default: 20}
+        offset: {type: integer, minimum: 0, default: 0}
+        hasMore: {type: boolean}
+    SocialStateRequest:
+      type: object
+      required: [kind, targetId]
+      properties:
+        kind: {type: string, enum: [PLAYLIST_LIKE, PIN_LIKE, FAVORITE, SAVED_PLAYLIST]}
+        targetId: {type: string, format: uuid}
+        active: {type: boolean, description: Установка целевого состояния. Без поля выполняется чтение.}
+      description: JWT требуется для записи и чтения личных коллекций. Для гостя чтение лайка показывает active=false и публичное число лайков.
+    SocialState:
+      type: object
+      required: [active, count]
+      properties:
+        active: {type: boolean}
+        count: {type: integer, format: int64, nullable: true, minimum: 0}
+    CopyPlaylistRequest:
+      type: object
+      required: [sourcePlaylistId]
+      properties:
+        sourcePlaylistId: {type: string, format: uuid}
+        playlistId: {type: string, format: uuid}
+        idempotencyKey: {$ref: '#/components/schemas/IdempotencyKey'}
+    CleanupMediaRequest:
+      type: object
+      required: [action]
+      properties:
+        action: {type: string, enum: [CLEANUP]}
+    CleanupMediaResult:
+      type: object
+      required: [processed]
+      properties:
+        processed: {type: integer, minimum: 0, maximum: 20}
+    AuthEmail:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string, format: email}
+    AuthNewPassword:
+      type: object
+      required: [password]
+      properties:
+        password: {type: string, format: password, writeOnly: true}
+    AuthEmailPassword:
+      allOf: [{$ref: '#/components/schemas/AuthEmail'}, {$ref: '#/components/schemas/AuthNewPassword'}]
+    AuthTokenRequest:
+      oneOf:
+      - {$ref: '#/components/schemas/AuthEmailPassword'}
+      - type: object
+        required: [refresh_token]
+        properties:
+          refresh_token: {type: string, writeOnly: true}
+      - type: object
+        required: [auth_code, code_verifier]
+        properties:
+          auth_code: {type: string, writeOnly: true}
+          code_verifier: {type: string, writeOnly: true}
+    AuthVerify:
+      type: object
+      required: [type]
+      properties:
+        type: {type: string, enum: [email, signup, recovery]}
+        email: {type: string, format: email}
+        token: {type: string, writeOnly: true}
+        token_hash: {type: string, writeOnly: true}
+      oneOf:
+      - required: [email, token]
+      - required: [token_hash]
+    AuthUser:
+      type: object
+      required: [id]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email}
+        email_confirmed_at: {type: string, format: date-time}
+    AuthSession:
+      type: object
+      required: [access_token, refresh_token, user]
+      properties:
+        access_token: {type: string}
+        refresh_token: {type: string}
+        expires_in: {type: integer, minimum: 0}
+        token_type: {type: string}
+        user: {$ref: '#/components/schemas/AuthUser'}
+    AuthSignup:
+      anyOf: [{$ref: '#/components/schemas/AuthUser'}, {$ref: '#/components/schemas/AuthSession'}]
+    AuthProblem:
+      type: object
+      properties:
+        code: {oneOf: [{type: string}, {type: integer}]}
+        error_code: {type: string}
+        msg: {type: string}
+        error_description: {type: string}
   responses:
+    AuthError: {description: Ошибка стандартного Supabase Auth, content: {application/json: {schema: {$ref: '#/components/schemas/AuthProblem'}}}}
     RpcError: {description: Ошибка PostgREST/RPC. Причина определяется HTTP-кодом и полями code/message., content: {application/json: {schema: {$ref: '#/components/schemas/ErrorPostgrest'}}}}
     EdgeError: {description: Ошибка Edge Function. Причина определяется HTTP-кодом и полями error.code/error.message., content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEdge'}}}}

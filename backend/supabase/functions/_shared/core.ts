@@ -102,7 +102,7 @@ export function secretKey():string {
   if(!x) throw new HttpError(503,'NOT_CONFIGURED','Secret key unavailable');return x;
 }
 // No blanket JWT verification disabled without an explicit auth check: publishable is not a user JWT.
-export async function authenticate(req: Request, required = false): Promise<Session> {
+export async function authenticate(req: Request, required = false, allowPendingAccountDeletion = false): Promise<Session> {
   const key = req.headers.get('apikey');
   const accepted=[publishableKey(),Deno.env.get('SUPABASE_ANON_KEY')||''].filter(Boolean);
   if (!key || !accepted.includes(key)) throw new HttpError(401,'INVALID_API_KEY','Valid publishable key required');
@@ -117,9 +117,23 @@ export async function authenticate(req: Request, required = false): Promise<Sess
   const res=await fetch(supabaseUrl()+'/auth/v1/user',{
     headers:{apikey:publishableKey(),Authorization:`Bearer ${match[1]}`},signal:AbortSignal.timeout(8000)
   }).catch(()=>{throw new HttpError(503,'AUTH_UNAVAILABLE','Authentication unavailable');});
-  if(!res.ok) throw new HttpError(res.status===401||res.status===403?401:503,'INVALID_JWT','Invalid or expired access token');
+  if(!res.ok) {
+    if([401,403,404].includes(res.status))throw new HttpError(401,'INVALID_JWT','Invalid or expired access token');
+    throw new HttpError(503,'AUTH_UNAVAILABLE','Authentication unavailable');
+  }
   const user=await res.json();
   if(!uuidRe.test(user.id||'')) throw new HttpError(401,'INVALID_JWT','Invalid user');
+  // The Auth server has verified the JWT. Use its session ID only to check current revocation.
+  let sessionId: unknown;
+  try {
+    const payload=match[1].split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    sessionId=JSON.parse(atob(payload)).session_id;
+  } catch { /* Missing claims fail closed below. */ }
+  if(typeof sessionId!=='string'||!uuidRe.test(sessionId))
+    throw new HttpError(401,'INVALID_JWT','Invalid session');
+  const sessionActive=await rpc('edge_verify_session',
+    {p_user:user.id,p_session:sessionId,p_allow_pending:allowPendingAccountDeletion});
+  if(sessionActive!==true)throw new HttpError(401,'SESSION_UNAVAILABLE','Session is unavailable');
   return {userId:user.id,jwt:match[1]};
 }
 export function publicHeaders(jwt: string | null):Record<string,string> {
