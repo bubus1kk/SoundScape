@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SoundScape — серверные HTTP-контракты
-  version: 1.5.1
+  version: 1.5.2
   description: |
     Контракт HTTP API SoundScape (Supabase/PostgreSQL/PostGIS/Auth/Storage/Edge). Спецификация включает локальные изменения BE-02. Доступность каждой операции в облаке зависит от применённых миграций и развёрнутых функций.
 
@@ -1471,7 +1471,7 @@ components:
         query: {type: string, minLength: 1, maxLength: 200}
         onlyInApp: {type: boolean, default: false}
         limit: {type: integer, minimum: 1, maximum: 50, default: 20}
-        offset: {type: integer, minimum: 0, default: 0}
+        offset: {type: integer, minimum: 0, maximum: 1000, default: 0}
         genreIds:
           type: array
           items: {type: integer, format: int32, minimum: 1}
@@ -1547,6 +1547,10 @@ components:
           minItems: 1
           maxItems: 5
           description: Если не задано, искать по всем пяти категориям.
+        includePublicMusicPins:
+          type: boolean
+          default: false
+          description: Добавить публичные музыкальные отметки в категорию PLACE и вернуть тип объекта в placeKind. Без параметра в этой категории возвращаются только города и места.
         genreIds:
           type: array
           items: {type: integer, format: int32, minimum: 1}
@@ -1557,7 +1561,7 @@ components:
           uniqueItems: true
         onlyInApp: {type: boolean, default: false, description: Для музыкальных результатов учитывать только доступные для воспроизведения внутри приложения записи.}
         limit: {type: integer, minimum: 1, maximum: 50, default: 20}
-        offset: {type: integer, minimum: 0, default: 0}
+        offset: {type: integer, minimum: 0, maximum: 1000, default: 0}
       required: [query]
     UnifiedSearchItem:
       type: object
@@ -1569,6 +1573,10 @@ components:
         id: {type: string, format: uuid}
         title: {type: string, description: 'Название трека, исполнителя, плейлиста, места или имя пользователя.'}
         subtitle: {type: string, nullable: true}
+        placeKind:
+          type: string
+          enum: [PLACE, PIN]
+          description: Возвращается для категории PLACE при includePublicMusicPins=true. PLACE означает город или место, PIN означает публичную музыкальную отметку.
         coverPath: {type: string, nullable: true, description: Только разрешённая обложка; личные пути не выдаются.}
         availability:
           type: string

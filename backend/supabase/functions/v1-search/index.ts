@@ -5,6 +5,7 @@ export default {fetch:run(async(req,ctx)=>{
  const session=await authenticate(req),p=await body(req);
  const query=text(p.query,200,'query'),limit=int(p.limit,20,1,50,'limit'),offset=int(p.offset,0,0,1000,'offset');
  const genreIds=ids(p.genreIds),moodIds=ids(p.moodIds),onlyInApp=bool(p.onlyInApp);
+ const includePublicMusicPins=bool(p.includePublicMusicPins);
  let categories=CATS;
  if(p.categories!==undefined){if(!Array.isArray(p.categories)||!p.categories.length||p.categories.length>5
    ||new Set(p.categories).size!==p.categories.length||p.categories.some((x:any)=>!CATS.includes(x)))
@@ -53,7 +54,13 @@ export default {fetch:run(async(req,ctx)=>{
  }
  if(categories.includes('PLACE')){
   const places=await select('places',`select=id,title,country_code&title=ilike.${fragment}&limit=100`,session.jwt,false,ctx);
-  otherItems.push(...places.map(p=>({category:'PLACE',id:p.id,title:p.title,subtitle:p.country_code})));
+  otherItems.push(...places.map(p=>({category:'PLACE',id:p.id,title:p.title,subtitle:p.country_code,
+   ...(includePublicMusicPins ? {placeKind:'PLACE'} : {})})));
+  if(includePublicMusicPins){
+   const pins=await select('music_pins',
+    `select=id,title&visibility=eq.PUBLIC&title=ilike.${fragment}&order=title.asc,id.asc&limit=100`,session.jwt,false,ctx);
+   otherItems.push(...pins.map(pin=>({category:'PLACE',id:pin.id,title:pin.title,subtitle:null,placeKind:'PIN'})));
+  }
  }
  if(categories.includes('USER')){
   const profiles=await select('profiles',`select=id,username&username=ilike.${fragment}&limit=100`,session.jwt,false,ctx);

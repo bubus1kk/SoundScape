@@ -324,6 +324,24 @@ for (const keyKind of ['current', 'legacy'] as const) Deno.test(`catalog and Edg
         geom:'SRID=4326;POINT(24 60)',
       },service!,service!,201);
     }
+    const placeSearch={query:title,categories:['PLACE']};
+    const withPins={...placeSearch,includePublicMusicPins:true};
+    const legacyPage=await invoke(search,placeSearch);
+    assert.deepEqual(legacyPage.items,[{category:'PLACE',id:publicPlace,title,subtitle:'FI'}]);
+    const firstPlacePage=await invoke(search,{...withPins,limit:1});
+    const secondPlacePage=await invoke(search,{...withPins,limit:1,offset:1});
+    assert.equal(firstPlacePage.hasMore,true);
+    assert.equal(secondPlacePage.hasMore,false);
+    assert.deepEqual([...firstPlacePage.items,...secondPlacePage.items].sort((a,b)=>a.placeKind.localeCompare(b.placeKind)),[
+      {category:'PLACE',id:secondPin,title,subtitle:null,placeKind:'PIN'},
+      {category:'PLACE',id:publicPlace,title,subtitle:'FI',placeKind:'PLACE'},
+    ]);
+    for(const token of [undefined,ownerToken,otherToken]){
+      for(const query of ['PRIVATE_CONTEXT','UNLISTED_CONTEXT']){
+        assert.deepEqual((await invoke(search,{...withPins,query},200,token)).items,[]);
+      }
+    }
+    assert.equal((await invoke(search,{...withPins,includePublicMusicPins:'true'},400)).error.code,'VALIDATION_ERROR');
     const placeRequest={mode:'PLACE',prompt:'Спокойная музыка для дождливого вечера',count:1,onlyInApp:true};
     const beforeHidden=generationReservations;
     await invoke(generatePlaylist,{...placeRequest,placeId:hiddenPlace},422,ownerToken);
