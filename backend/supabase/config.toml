@@ -436,6 +436,8 @@ verify_jwt = false
 verify_jwt = false
 [functions.v1-media]
 verify_jwt = false
+[functions.v1-editorial-cover]
+verify_jwt = false
 [functions.v1-manage-share]
 verify_jwt = false
 [functions.v1-delete-account]

@@ -1,4 +1,4 @@
-import { authenticate, body, reserve, response, run, select, uuid, rpc, HttpError } from '../_shared/core.ts';
+import { authenticate, body, databaseUuid, reserve, response, run, select, rpc, HttpError } from '../_shared/core.ts';
 import { audiusOperationLimits, audiusTrack, checkAudiusStream, withAudiusProbe } from '../_shared/audius.ts';
 import { invalidProviderResponse } from '../_shared/provider_errors.ts';
 import { verifiedExternalSource } from '../_shared/catalog.ts';
@@ -65,7 +65,7 @@ export async function resolveTrack(trackId: string, ctx?: RequestContext) {
 export default { fetch: run(async (req, ctx) => {
   const session = await authenticate(req);
   const p = await body(req);
-  const trackId = uuid(p.trackId, 'trackId');
+  const trackId = databaseUuid(p.trackId, 'trackId');
   await reserve('RESOLVE', session.userId, ctx);
   return response(await resolveTrack(trackId, ctx));
 }, 'v1-resolve-track') };

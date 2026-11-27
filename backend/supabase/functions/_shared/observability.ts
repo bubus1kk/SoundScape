@@ -6,6 +6,8 @@ export type RequestContext = Readonly<{
   requestId: string;
   operation: string;
   startedAtMs: number;
+  beforeAudiusRequest?: (stage: 'search' | 'metadata' | 'stream') => Promise<void>;
+  paceAudiusRequest?: () => Promise<void>;
 }>;
 
 const safeName = (name: string, fallback: string): string =>

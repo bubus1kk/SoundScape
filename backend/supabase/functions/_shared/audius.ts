@@ -11,7 +11,7 @@ const missingTrack = Symbol('Audius track missing');
 
 export type AudiusTrack = {
   id: string; title: string; artist: string; durationMs: number; permalink: string;
-  genre?: string; mood?: string; artistId?: string;
+  genre?: string; mood?: string; artistId?: string; isrc?: string; recordingMbid?: string;
 };
 
 type Metadata = { track: AudiusTrack; restricted: boolean } | { reason: string };
@@ -33,6 +33,10 @@ export function audiusMetadata(x: any): Metadata {
       !isSafeExternalUrl(permalink)) return { reason: 'invalid_metadata' };
   const track: AudiusTrack = { id: x.id, title, artist, durationMs, permalink };
   if (typeof x.user?.id === 'string' && trackId.test(x.user.id)) track.artistId = x.user.id;
+  if (typeof x.isrc === 'string' && /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/i.test(x.isrc)) track.isrc=x.isrc.toUpperCase();
+  if (typeof x.musicbrainz_recording_id === 'string' &&
+      /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(x.musicbrainz_recording_id))
+    track.recordingMbid=x.musicbrainz_recording_id.toLowerCase();
   if (x.field_visibility?.genre !== false && typeof x.genre === 'string' && x.genre.trim())
     track.genre = x.genre.trim().slice(0, 80);
   if (x.field_visibility?.mood !== false && typeof x.mood === 'string' && x.mood.trim())
@@ -76,7 +80,7 @@ export async function withAudiusProbe<T>(providerId: string, action: () => Promi
 }
 
 async function audiusFetch(
-  url: URL, operation: ProviderStage, headers: HeadersInit, ctx?: RequestContext, deadline?: AbortSignal,
+  url: URL, operation: Extract<ProviderStage, 'search' | 'metadata' | 'stream'>, headers: HeadersInit, ctx?: RequestContext, deadline?: AbortSignal,
   authenticated = true,
 ) {
   const requestHeaders = new Headers(headers);
@@ -86,12 +90,14 @@ async function audiusFetch(
     url.searchParams.set('app_name', 'SoundScape');
   }
   if (ctx) {
+    await ctx.paceAudiusRequest?.();
     const budget = await rpc('edge_audius_reserve',{},ctx,deadline);
     if (budget?.configured !== true)
       throw new HttpError(503,'PROVIDER_UNAVAILABLE','Audius request budget is unavailable');
     if (budget.allowed !== true)
       throw new HttpError(429,'RATE_LIMITED','Audius request budget exhausted',budget.retryAfter);
   }
+  await ctx?.beforeAudiusRequest?.(operation);
   const timeout = AbortSignal.timeout(8000);
   const response = await fetch(url, {
     headers: requestHeaders, redirect: 'manual', signal: deadline ? AbortSignal.any([timeout, deadline]) : timeout,

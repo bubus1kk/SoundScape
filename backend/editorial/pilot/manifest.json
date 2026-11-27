@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "evidence": "HISTORICAL_PILOT",
+  "cities": [
+    {
+      "city": "london",
+      "placeId": "993c5240-1aed-4a7a-aca4-2094f7f7f84c",
+      "playlistId": "2ba4fc9e-2ba4-5117-b3c7-89f4b3724477",
+      "revision": 3,
+      "productionCoverPath": "editorial/capitals/v1/london-dd57bb1bfa7eed75.png",
+      "trackIds": [
+        "f7c6afe7-482e-48db-b310-76849662332a",
+        "e718d2f1-3167-1ad7-e738-d94cb46c3075",
+        "3cd297bf-f067-4e6e-898f-87dd29f1df3c",
+        "36d90e23-207e-43c2-84da-a199fcde5a41",
+        "e194d5f1-0e4f-4739-839f-0f1159009058",
+        "3fa0b3a1-4790-a019-f8e4-2eeec4ffb099",
+        "3df6eb1d-163f-40e7-9f08-bf25366a1063",
+        "5381c334-a4a5-436c-b8ae-be1451a21cfd",
+        "cad96ac3-f61e-4e43-9a91-1b5089b0a92e",
+        "3f53cd53-4b02-4a11-9b55-c721512e55a2",
+        "be632d0e-01d3-417f-b590-14d3862de595",
+        "629f18a6-6567-4617-a9f4-46c159ebd21b",
+        "2b0df17b-54de-a8b3-3dc7-efd3535a30e4"
+      ],
+      "inAppAtPilot": 10,
+      "externalOnlyAtPilot": 3
+    },
+    {
+      "city": "tokyo",
+      "placeId": "769910d6-3c38-4450-a66d-e98d7ebe5c83",
+      "playlistId": "437a00a1-5fb8-5784-aa46-138823a50937",
+      "revision": 3,
+      "productionCoverPath": "editorial/capitals/v1/tokyo-46a12583e0369633.png",
+      "trackIds": [
+        "db182efe-1556-4681-8027-7eaebb74cdf7",
+        "89ae19fb-a091-c2f9-0a1d-2fc7a0ea14af",
+        "7592f5e3-0253-49d6-a149-4ebfa39c4155",
+        "d018124f-1ecf-49e3-ae9b-0882eb8e6290",
+        "6eb0213b-87dd-44c3-8c08-afc0d9fad975",
+        "49217ebc-5ad4-4478-aeae-1c6617aac898",
+        "1adb4ef4-deae-4c94-9f1d-d12764764e24",
+        "333039a7-6d04-c1e1-c87e-3b4bba601c32",
+        "2df7e37f-a0c1-4f99-80fb-8797ceecc931",
+        "a0a76a6a-9c66-44dd-8049-038e1db0c62d",
+        "407773e3-cbf1-45d7-9f14-a4d59e3e0be2",
+        "affe83ef-8fd9-49c6-b944-a58d9cbb6c8a",
+        "37d75658-2495-dac9-cbff-ef15dd8a877c"
+      ],
+      "inAppAtPilot": 10,
+      "externalOnlyAtPilot": 3
+    }
+  ],
+  "usage": {
+    "audius": 498,
+    "oauth": 4,
+    "completion": 4
+  },
+  "sha256": {
+    "catalog.json": "d21f5f668fcd12a440d15f86e1abe4ef8b63ed3b2a7f7b5893adafbef1127e94",
+    "credits.json": "89764000c8ab120e6bdc34ff73228b5a3a4af4218f52cf45e0b42422ae9d351d",
+    "london-plan.json": "8099b85e012ac7c8de2bdad7236ea394ba54341a6bcae65d66a2b1a66f705d7d",
+    "london-resolver.json": "6c03e11fe487d2d41f09cf73d98b8eec90c1218c2bffecf2e198891d0012d6c7",
+    "provider-ledger.jsonl": "d07e270d37986e6afe92f90676bf84514eda7960117dea51f8f7011f106e35dd",
+    "tokyo-plan.json": "7692f080084ea4a012bbe5a120e44f17f1ab4f202b5dca3e8cdc45a7037f7edc",
+    "tokyo-resolver.json": "efe1e83904b9112da2eaede3053baf6fa51ed2aebb8db1b6c4d45994e113f9a6"
+  }
+}

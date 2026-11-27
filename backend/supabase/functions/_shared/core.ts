@@ -9,6 +9,8 @@ export class HttpError extends Error {
               public retryAfter?: number) { super(message); }
 }
 export const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Some existing catalog keys were imported as PostgreSQL UUIDs without RFC version/variant bits.
+export const databaseUuidRe = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 export function text(v: unknown, max: number, name: string, min = 1): string {
   if (typeof v !== 'string' || v.trim().length < min || v.length > max)
     throw new HttpError(400, 'VALIDATION_ERROR', `Invalid ${name}`);
@@ -29,6 +31,11 @@ export function uuid(v: unknown, name = 'id'): string {
   if (typeof v !== 'string' || !uuidRe.test(v))
     throw new HttpError(400, 'VALIDATION_ERROR', `Invalid ${name}`);
   return v;
+}
+export function databaseUuid(v: unknown, name: string): string {
+  if (typeof v !== 'string' || !databaseUuidRe.test(v))
+    throw new HttpError(400, 'VALIDATION_ERROR', `Invalid ${name}`);
+  return v.toLowerCase();
 }
 export function ids(v: unknown): number[] {
   if (v === undefined) return [];

@@ -1,11 +1,6 @@
 import {authenticate,body,text,uuid,reserve,rpc,sha256,run,HttpError,supabaseUrl,privilegedHeaders,response} from '../_shared/core.ts';
 import {ownedPaths, removeMedia} from '../_shared/media_cleanup.ts';
-function matchesImage(type:string, bytes:Uint8Array):boolean {
- if(type==='image/jpeg')return bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff;
- if(type==='image/png')return [137,80,78,71,13,10,26,10].every((value,index)=>bytes[index]===value);
- return type==='image/webp'&&bytes.length>=12&&
-   String.fromCharCode(...bytes.subarray(0,4))==='RIFF'&&String.fromCharCode(...bytes.subarray(8,12))==='WEBP';
-}
+import {matchesImage} from '../_shared/image.ts';
 export default {fetch:run(async(req,ctx)=>{
  const session=await authenticate(req),p=await body(req);
  if (p.action === 'CLEANUP') {

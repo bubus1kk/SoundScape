@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: SoundScape — серверные HTTP-контракты
-  version: 1.4.1
+  version: 1.5.1
   description: |
     Контракт HTTP API SoundScape (Supabase/PostgreSQL/PostGIS/Auth/Storage/Edge). Спецификация включает локальные изменения BE-02. Доступность каждой операции в облаке зависит от применённых миграций и развёрнутых функций.
 
-    RPC принимает POST /rest/v1/rpc/* с Content-Type application/json и исходным camelCase JSON в теле. Гостевые вызовы требуют apikey. Для личных операций USER, EDITOR и ADMIN передают Authorization с действующим JWT. Сервер проверяет сессию и права. API редакционного управления описывается отдельно.
+    RPC принимает POST /rest/v1/rpc/* с Content-Type application/json и исходным camelCase JSON в теле. Гостевые вызовы требуют apikey. Для личных операций USER, EDITOR и ADMIN передают Authorization с действующим JWT. Сервер проверяет сессию и права. Редакционные операции BE-03 описаны в разделе Editorial.
 
     GENERATE: максимум 5 попыток на пользователя и 50 на проект в сутки UTC; считаются также неуспешные попытки после резервирования квоты, сброс в 00:00 UTC. Маршруты имеют бизнес-версию v1; info.version — версия документа.
 servers:
@@ -25,7 +25,160 @@ tags:
 - name: Auth
 - name: Profiles
 - name: Social
+- name: Editorial
 paths:
+  /functions/v1/v1-editorial-cover:
+    post:
+      tags: [Editorial]
+      summary: Загрузить новую обложку редакционной подборки
+      description: EDITOR / ADMIN. До 10 MiB. Сервер проверяет сигнатуру JPEG, PNG или WebP и выдаёт новый неизменяемый coverPath. Путь передаётся в save_editorial_draft. Для замены загружается новый файл. Повтор загрузки создаёт новый путь. Непривязанные файлы можно удалить через Storage.
+      operationId: uploadEditorialCover
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody:
+        required: true
+        content:
+          image/jpeg: {schema: {type: string, format: binary}}
+          image/png: {schema: {type: string, format: binary}}
+          image/webp: {schema: {type: string, format: binary}}
+      responses:
+        '201':
+          description: Изображение сохранено в закрытом Storage
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [coverPath]
+                properties:
+                  coverPath: {type: string, example: 'editorial/covers/649ec052-32bf-4c09-9789-848e3efc4af3.png'}
+        '401': {$ref: '#/components/responses/EdgeError'}
+        '403': {$ref: '#/components/responses/EdgeError'}
+        '405': {$ref: '#/components/responses/EdgeError'}
+        '413': {$ref: '#/components/responses/EdgeError'}
+        '415': {$ref: '#/components/responses/EdgeError'}
+        '422': {$ref: '#/components/responses/EdgeError'}
+        '429': {$ref: '#/components/responses/EdgeError'}
+        '503': {$ref: '#/components/responses/EdgeError'}
+  /rest/v1/rpc/list_editorial_cities:
+    post:
+      tags: [Editorial]
+      summary: Список 20 утверждённых городов и результат привязки
+      description: EDITOR / ADMIN. Возвращает MISSING или AMBIGUOUS, если однозначный объект places отсутствует.
+      operationId: list_editorial_cities
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EmptyObject'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialCityList'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/get_editorial_draft:
+    post:
+      tags: [Editorial]
+      summary: Прочитать рабочую ревизию
+      description: EDITOR / ADMIN. placeId относится к существующему утверждённому городу.
+      operationId: get_editorial_draft
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialPlaceRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialDraft'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/save_editorial_draft:
+    post:
+      tags: [Editorial]
+      summary: Создать или изменить редакционный черновик
+      description: EDITOR / ADMIN. Отправка placeId и expectedRevision 0 инициализирует черновик из единственной существующей официальной подборки, сохраняя UUID, метаданные и порядок треков. Повтор инициализации возвращает текущий черновик. Остальные значения выполняют compare-and-set. Переданный trackIds целиком заменяет упорядоченный состав. Пропущенные поля сохраняются. Значимая правка сбрасывает утверждение.
+      operationId: save_editorial_draft
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SaveEditorialDraft'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialDraft'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '409': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/check_editorial_draft:
+    post:
+      tags: [Editorial]
+      summary: Проверить готовность рабочей ревизии
+      description: EDITOR / ADMIN. Требуются 12–15 уникальных треков, ровно 2–3 EXTERNAL_ONLY с точной подтверждённой ссылкой и свежие Audius IN_APP на остальных позициях. Проверка возвращает счётчики и конкретные причины в issues.
+      operationId: check_editorial_draft
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialPlaceRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialReadiness'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/approve_editorial_draft:
+    post:
+      tags: [Editorial]
+      summary: Вручную утвердить конкретную ревизию
+      description: ADMIN с назначенным сервером признаком владельца soundscape_editorial_owner. Вызывается после ручной проверки. Повтор тем же владельцем для той же готовой ревизии сохраняет дату утверждения.
+      operationId: approve_editorial_draft
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialRevisionRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialDraft'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '409': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/publish_editorial_draft:
+    post:
+      tags: [Editorial]
+      summary: Опубликовать утверждённую ревизию
+      description: ADMIN с признаком владельца. Сервер заново проверяет готовность и действительность утверждения. Вся публичная запись обновляется атомарно. Повтор уже опубликованной ревизии возвращает текущее состояние без записи.
+      operationId: publish_editorial_draft
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialRevisionRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialDraft'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '409': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/unpublish_editorial_playlist:
+    post:
+      tags: [Editorial]
+      summary: Снять официальную подборку с публикации
+      description: ADMIN с признаком владельца. Снимает публичную видимость, очищает утверждение и повышает ревизию, если подборка была опубликована. Повтор со старой ревизией возвращает 409. UUID плейлиста сохраняется для повторной публикации.
+      operationId: unpublish_editorial_playlist
+      security: [{PublishableKey: [], UserJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialRevisionRequest'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialDraft'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+        '404': {$ref: '#/components/responses/RpcError'}
+        '409': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
+  /rest/v1/rpc/editorial_import_fixture_batch:
+    post:
+      tags: [Editorial]
+      summary: Импортировать пакет синтетических записей в BE-03 QA
+      description: Только service_role и явный маркер одноразовой БД. Контракт для QA. Повтор использует уже присвоенные SoundScape UUID по Audius provider ID.
+      operationId: editorial_import_fixture_batch
+      security: [{ServiceKey: [], ServiceJwt: []}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialFixtureBatch'}}}}
+      responses:
+        '200': {description: Успешный ответ, content: {application/json: {schema: {$ref: '#/components/schemas/EditorialFixtureImportResult'}}}}
+        '400': {$ref: '#/components/responses/RpcError'}
+        '401': {$ref: '#/components/responses/RpcError'}
+        '403': {$ref: '#/components/responses/RpcError'}
+        '422': {$ref: '#/components/responses/RpcError'}
   /rest/v1/rpc/get_my_profile:
     post:
       tags: [Profiles]
@@ -287,7 +440,7 @@ paths:
         '422': {$ref: '#/components/responses/AuthError'}
   /storage/v1/object/soundscape-media/{objectPath}:
     parameters:
-    - {in: path, name: objectPath, required: true, schema: {type: string}, description: 'Путь с сегментами users/<uid>/<filename>; редакторы используют editorial/<filename>.'}
+    - {in: path, name: objectPath, required: true, schema: {type: string}, description: 'Путь users/<uid>/<filename> или редакционный путь. Для загрузки editorial/covers/* используйте v1-editorial-cover.'}
     post:
       tags: [Sharing]
       summary: Загрузить изображение в закрытый bucket
@@ -322,7 +475,7 @@ paths:
       tags: [Geography]
       summary: Места в видимом прямоугольнике карты
       operationId: getVisiblePlaces
-      description: Публичные редакционные города и опубликованные PUBLIC-отметки. Личная PRIVATE-отметка доступна только владельцу при JWT. UNLISTED исключены из обзора. При minLon > maxLon учитывается пересечение антимеридиана.
+      description: Публичные редакционные города и опубликованные PUBLIC-отметки. У города с опубликованной официальной подборкой playlistId и coverPath указывают на подборку и её обложку. Обложка доступна через v1-media с objectType PLACE и UUID города. Личная PRIVATE-отметка доступна только владельцу при JWT. UNLISTED исключены из обзора. При minLon > maxLon учитывается пересечение антимеридиана.
       security: [{PublishableKey: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VisiblePlacesRequest'}}}}
       responses:
@@ -745,7 +898,136 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: 'Access JWT Supabase Auth от вошедшего пользователя; передавать в Authorization: Bearer <token>.'
+    ServiceKey:
+      type: apiKey
+      in: header
+      name: apikey
+      description: Служебный ключ одноразового локального QA-стенда.
+    ServiceJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Локальный JWT service_role для импорта тестовых данных.
   schemas:
+    EditorialCityList:
+      type: array
+      minItems: 20
+      maxItems: 20
+      items:
+        type: object
+        required: [code, countryCode, title, placeId, mapVisible, binding, draftRevision, playlistId, officialPlaylistId, officialBinding]
+        properties:
+          code: {type: string}
+          countryCode: {type: string, minLength: 2, maxLength: 2}
+          title: {type: string}
+          placeId: {type: string, format: uuid, nullable: true}
+          mapVisible: {type: boolean}
+          binding: {type: string, enum: [BOUND, MISSING, AMBIGUOUS]}
+          draftRevision: {type: integer, nullable: true}
+          playlistId: {type: string, format: uuid, nullable: true}
+          officialPlaylistId: {type: string, format: uuid, nullable: true, description: UUID единственной официальной подборки включая PRIVATE}
+          officialBinding: {type: string, enum: [BOUND, MISSING, AMBIGUOUS]}
+    EditorialPlaceRequest:
+      type: object
+      required: [placeId]
+      properties:
+        placeId: {type: string, format: uuid}
+    EditorialRevisionRequest:
+      type: object
+      required: [placeId, expectedRevision]
+      properties:
+        placeId: {type: string, format: uuid}
+        expectedRevision: {type: integer, minimum: 1, maximum: 2147483647}
+    SaveEditorialDraft:
+      type: object
+      additionalProperties: false
+      required: [placeId, expectedRevision]
+      properties:
+        placeId: {type: string, format: uuid}
+        expectedRevision: {type: integer, minimum: 0, maximum: 2147483647}
+        title: {type: string, maxLength: 150}
+        description: {type: string, maxLength: 2000}
+        coverPath: {type: string, nullable: true, maxLength: 250}
+        genreIds: {$ref: '#/components/schemas/EditorialFacetIds'}
+        tagIds: {$ref: '#/components/schemas/EditorialFacetIds'}
+        trackIds:
+          type: array
+          maxItems: 30
+          items: {type: string, format: uuid}
+          description: Позиции идут по порядку массива с 1. Допустимо сохранить незавершённый набор. Проверка готовности сообщает о дублях и количестве вне 12–15.
+    EditorialFacetIds:
+      type: array
+      maxItems: 30
+      items: {type: integer, minimum: 1, maximum: 32767}
+    EditorialDraft:
+      type: object
+      required: [placeId, playlistId, revision, title, description, coverPath, genreIds, tagIds, trackIds, approvedRevision, approvedBy, approvedAt, publishedRevision, isPublished]
+      properties:
+        placeId: {type: string, format: uuid}
+        playlistId: {type: string, format: uuid, nullable: true}
+        revision: {type: integer, minimum: 1}
+        title: {type: string}
+        description: {type: string}
+        coverPath: {type: string, nullable: true}
+        genreIds: {$ref: '#/components/schemas/EditorialFacetIds'}
+        tagIds: {$ref: '#/components/schemas/EditorialFacetIds'}
+        trackIds: {type: array, items: {type: string, format: uuid}}
+        approvedRevision: {type: integer, nullable: true}
+        approvedBy: {type: string, format: uuid, nullable: true}
+        approvedAt: {type: string, format: date-time, nullable: true}
+        publishedRevision: {type: integer, nullable: true}
+        isPublished: {type: boolean}
+    EditorialReadiness:
+      type: object
+      required: [revision, issues, readyForApproval, readyForPublication, approvalValid, inAppCount, externalOnlyCount]
+      properties:
+        revision: {type: integer}
+        inAppCount: {type: integer, minimum: 0}
+        externalOnlyCount: {type: integer, minimum: 0}
+        issues:
+          type: array
+          items:
+            type: object
+            required: [code]
+            properties:
+              code:
+                type: string
+                enum: [CITY_NOT_ON_PUBLIC_MAP, TITLE_REQUIRED, DESCRIPTION_REQUIRED, COVER_REQUIRED_OR_INVALID, GENRES_REQUIRED, TAGS_REQUIRED, TRACK_COUNT_12_TO_15, DUPLICATE_TRACK, UNKNOWN_TRACK, IN_APP_RECHECK_REQUIRED, NO_VERIFIED_SOURCE, NOT_ENOUGH_EXTERNAL_ONLY, TOO_MANY_EXTERNAL_ONLY, NOT_ENOUGH_IN_APP]
+              trackId: {type: string, format: uuid}
+        readyForApproval: {type: boolean}
+        readyForPublication: {type: boolean}
+        approvalValid: {type: boolean}
+    EditorialFixtureBatch:
+      type: object
+      required: [p_target, p_items]
+      properties:
+        p_target: {type: string, format: uuid}
+        p_items:
+          type: array
+          minItems: 1
+          maxItems: 25
+          items:
+            type: object
+            required: [id, artistId, title, artist, durationMs, permalink, canStream, verifiedAt]
+            properties:
+              id: {type: string, pattern: '^BE03Fixture-[a-z0-9-]+$'}
+              artistId: {type: string, pattern: '^BE03Fixture-[a-z0-9-]+$'}
+              title: {type: string, maxLength: 300}
+              artist: {type: string, maxLength: 200}
+              durationMs: {type: integer, minimum: 1, maximum: 7200000}
+              permalink: {type: string, format: uri}
+              genre: {type: string, maxLength: 80}
+              mood: {type: string, maxLength: 80}
+              canStream: {type: boolean}
+              verifiedAt: {type: string, format: date-time}
+    EditorialFixtureImportResult:
+      type: array
+      items:
+        type: object
+        required: [id, provider_track_id]
+        properties:
+          id: {type: string, format: uuid}
+          provider_track_id: {type: string}
     Visibility:
       type: string
       description: Доступность пользовательского объекта.
@@ -826,7 +1108,7 @@ components:
       type: object
       properties:
         id: {type: string, format: uuid}
-        ownerId: {type: string, format: uuid}
+        ownerId: {type: string, format: uuid, description: UUID владельца личной подборки или системный UUID для официальной.}
         title: {type: string}
         description: {type: string, nullable: true}
         visibility: {$ref: '#/components/schemas/Visibility'}
@@ -851,7 +1133,7 @@ components:
       type: object
       properties:
         id: {type: string, format: uuid}
-        ownerId: {type: string, format: uuid}
+        ownerId: {type: string, format: uuid, description: UUID владельца личной подборки или системный UUID для официальной.}
         title: {type: string}
         description: {type: string, nullable: true}
         visibility: {$ref: '#/components/schemas/Visibility'}
@@ -1207,7 +1489,7 @@ components:
     ResolveTrackRequest:
       type: object
       properties:
-        trackId: {type: string, format: uuid}
+        trackId: {type: string, format: uuid, description: Канонический 36-символьный UUID каталога. Допускаются исторические значения PostgreSQL.}
       required: [trackId]
     GeneratePlaylistRequest:
       type: object

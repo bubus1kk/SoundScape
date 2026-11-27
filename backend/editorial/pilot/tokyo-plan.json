@@ -1,0 +1,600 @@
+{
+  "version": 1,
+  "city": "tokyo",
+  "placeId": "769910d6-3c38-4450-a66d-e98d7ebe5c83",
+  "playlistId": "437a00a1-5fb8-5784-aa46-138823a50937",
+  "expectedRevision": 1,
+  "original": {
+    "city": "tokyo",
+    "placeId": "769910d6-3c38-4450-a66d-e98d7ebe5c83",
+    "playlistId": "437a00a1-5fb8-5784-aa46-138823a50937",
+    "title": "Токио: между последним поездом и рассветом",
+    "description": "Поезд уходит за горизонт, и шум большого города постепенно становится ритмом. Джазовые петли Nujabes, детальная электроника Cornelius и фортепианные пространства Рюити Сакамото складываются в маршрут от оживлённого вечера к тихому утру. Это авторский взгляд на несколько музыкальных поколений Токио, а не набор песен с названием города. Тёплый синт-поп расширяет электронную линию и связывает её с поколением YMO.",
+    "coverPath": "editorial/capitals/v1/tokyo-46a12583e0369633.png",
+    "revision": 1,
+    "visibility": "PRIVATE",
+    "publishedAt": null,
+    "genreIds": [
+      1,
+      2,
+      3
+    ],
+    "tagIds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "tracks": [
+      {
+        "id": "89ae19fb-a091-c2f9-0a1d-2fc7a0ea14af",
+        "title": "Counting Stars",
+        "artist": "Nujabes",
+        "artists": [
+          "Nujabes"
+        ],
+        "durationMs": 247613,
+        "sources": [
+          {
+            "id": "4055501a-84e1-e2ec-91cf-3570595cc014",
+            "provider": "APPLE_MUSIC",
+            "track_id": "89ae19fb-a091-c2f9-0a1d-2fc7a0ea14af",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/counting-stars/1078905956?i=1078905969&uo=4",
+            "provider_track_id": "1078905969"
+          }
+        ]
+      },
+      {
+        "id": "333039a7-6d04-c1e1-c87e-3b4bba601c32",
+        "title": "Drop",
+        "artist": "Cornelius",
+        "artists": [
+          "Cornelius"
+        ],
+        "durationMs": 308387,
+        "sources": [
+          {
+            "id": "b839e703-f2c7-de20-2da4-1c11f388d598",
+            "provider": "APPLE_MUSIC",
+            "track_id": "333039a7-6d04-c1e1-c87e-3b4bba601c32",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/drop/1254149405?i=1254149726&uo=4",
+            "provider_track_id": "1254149726"
+          }
+        ]
+      },
+      {
+        "id": "3e1d6ae4-0ff7-410f-f085-f6b683eb64f0",
+        "title": "Reflection Eternal",
+        "artist": "Nujabes",
+        "artists": [
+          "Nujabes"
+        ],
+        "durationMs": 257893,
+        "sources": [
+          {
+            "id": "dad7cc1b-2fe8-3d81-1966-2e1069e0ff41",
+            "provider": "APPLE_MUSIC",
+            "track_id": "3e1d6ae4-0ff7-410f-f085-f6b683eb64f0",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/reflection-eternal/1078914477?i=1078914487&uo=4",
+            "provider_track_id": "1078914487"
+          }
+        ]
+      },
+      {
+        "id": "d243b329-5cbb-1698-20f9-3f0cb27ba5f3",
+        "title": "Merry Christmas Mr. Lawrence (Version for Piano Trio)",
+        "artist": "Ryuichi Sakamoto",
+        "artists": [
+          "Ryuichi Sakamoto",
+          "Jaques Morelenbaum",
+          "Everton Nelson"
+        ],
+        "durationMs": 286467,
+        "sources": [
+          {
+            "id": "2e218108-eecb-9fc6-2c53-a18b76c266c9",
+            "provider": "APPLE_MUSIC",
+            "track_id": "d243b329-5cbb-1698-20f9-3f0cb27ba5f3",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/merry-christmas-mr-lawrence-version-for-piano-trio/1544572985?i=1544573393&uo=4",
+            "provider_track_id": "1544573393"
+          }
+        ]
+      },
+      {
+        "id": "16a7476e-8259-6342-803e-51079d961490",
+        "title": "Star Fruits Surf Rider",
+        "artist": "Cornelius",
+        "artists": [
+          "Cornelius"
+        ],
+        "durationMs": 347760,
+        "sources": [
+          {
+            "id": "1e80e080-77c9-cec0-bf25-c7211f6003ad",
+            "provider": "APPLE_MUSIC",
+            "track_id": "16a7476e-8259-6342-803e-51079d961490",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/star-fruits-surf-rider/1254006696?i=1254008348&uo=4",
+            "provider_track_id": "1254008348"
+          }
+        ]
+      },
+      {
+        "id": "1a2b16fa-6064-70b4-8c77-d303a6067c44",
+        "title": "Aruarian Dance",
+        "artist": "Nujabes",
+        "artists": [
+          "Nujabes"
+        ],
+        "durationMs": 250433,
+        "sources": [
+          {
+            "id": "8bb501e5-d7c3-9404-a9b9-1fff5a1c1ea2",
+            "provider": "APPLE_MUSIC",
+            "track_id": "1a2b16fa-6064-70b4-8c77-d303a6067c44",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/aruarian-dance/1721842998?i=1721843001&uo=4",
+            "provider_track_id": "1721843001"
+          }
+        ]
+      },
+      {
+        "id": "86c1d827-7dfd-2db5-1c54-1ae0e5d0a395",
+        "title": "If You're Here",
+        "artist": "Cornelius",
+        "artists": [
+          "Cornelius"
+        ],
+        "durationMs": 371707,
+        "sources": [
+          {
+            "id": "ffd3641f-b83b-336a-f024-b6b49d31aefd",
+            "provider": "APPLE_MUSIC",
+            "track_id": "86c1d827-7dfd-2db5-1c54-1ae0e5d0a395",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/if-youre-here/1843727844?i=1843727847&uo=4",
+            "provider_track_id": "1843727847"
+          }
+        ]
+      },
+      {
+        "id": "92e7c93f-1e2a-350a-37f5-44eb178a5eb5",
+        "title": "Rain",
+        "artist": "Ryuichi Sakamoto",
+        "artists": [
+          "Ryuichi Sakamoto"
+        ],
+        "durationMs": 220556,
+        "sources": [
+          {
+            "id": "3e7efbfd-70da-8862-e4eb-9ad74638e473",
+            "provider": "APPLE_MUSIC",
+            "track_id": "92e7c93f-1e2a-350a-37f5-44eb178a5eb5",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/rain/1488023157?i=1488023159&uo=4",
+            "provider_track_id": "1488023159"
+          }
+        ]
+      },
+      {
+        "id": "f65d07c8-4b1e-9df2-7cec-40be3fa79c60",
+        "title": "Luv(sic.), Pt. 3 [feat. Shing02]",
+        "artist": "Nujabes",
+        "artists": [
+          "Nujabes",
+          "Shing02"
+        ],
+        "durationMs": 336867,
+        "sources": [
+          {
+            "id": "e2bbf39f-e995-0c27-a1ec-8e7a2796e104",
+            "provider": "APPLE_MUSIC",
+            "track_id": "f65d07c8-4b1e-9df2-7cec-40be3fa79c60",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/luv-sic-pt-3-feat-shing02/1078914477?i=1078914488&uo=4",
+            "provider_track_id": "1078914488"
+          }
+        ]
+      },
+      {
+        "id": "b3a31fef-a8e4-b11a-e688-0275ba3cb257",
+        "title": "Mic Check",
+        "artist": "Cornelius",
+        "artists": [
+          "Cornelius"
+        ],
+        "durationMs": 181467,
+        "sources": [
+          {
+            "id": "1493d5e6-baa6-bb60-8bb4-162066b71aa2",
+            "provider": "APPLE_MUSIC",
+            "track_id": "b3a31fef-a8e4-b11a-e688-0275ba3cb257",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/mic-check/1254006696?i=1254006699&uo=4",
+            "provider_track_id": "1254006699"
+          }
+        ]
+      },
+      {
+        "id": "37d75658-2495-dac9-cbff-ef15dd8a877c",
+        "title": "Andata",
+        "artist": "Ryuichi Sakamoto",
+        "artists": [
+          "Ryuichi Sakamoto"
+        ],
+        "durationMs": 206833,
+        "sources": [
+          {
+            "id": "d55597a4-1951-e8a8-613d-fe1ceafe9c8a",
+            "provider": "APPLE_MUSIC",
+            "track_id": "37d75658-2495-dac9-cbff-ef15dd8a877c",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/andata/1753124262?i=1753124419&uo=4",
+            "provider_track_id": "1753124419"
+          }
+        ]
+      },
+      {
+        "id": "57ef7287-4e1c-f0dd-5c06-18386a0053b4",
+        "title": "20211130",
+        "artist": "Ryuichi Sakamoto",
+        "artists": [
+          "Ryuichi Sakamoto"
+        ],
+        "durationMs": 322316,
+        "sources": [
+          {
+            "id": "2167670b-528c-653a-3ebf-159ff47f3405",
+            "provider": "APPLE_MUSIC",
+            "track_id": "57ef7287-4e1c-f0dd-5c06-18386a0053b4",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/20211130/1653999635?i=1654000079&uo=4",
+            "provider_track_id": "1654000079"
+          }
+        ]
+      },
+      {
+        "id": "15f98209-3518-ba0e-9082-8319c8cce1e2",
+        "title": "Sports Men (2019 Remastering)",
+        "artist": "Haruomi Hosono",
+        "artists": [
+          "Haruomi Hosono"
+        ],
+        "durationMs": 245960,
+        "sources": [
+          {
+            "id": "a8cdc8c0-f9f4-5fb0-076f-3c1586f810e0",
+            "provider": "APPLE_MUSIC",
+            "track_id": "15f98209-3518-ba0e-9082-8319c8cce1e2",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/sports-men-2019-remastering/1464659995?i=1464660099&uo=4",
+            "provider_track_id": "1464660099"
+          }
+        ]
+      }
+    ]
+  },
+  "slots": [
+    {
+      "keepExternal": "89ae19fb-a091-c2f9-0a1d-2fc7a0ea14af"
+    },
+    {
+      "audius": "OvGV5gl"
+    },
+    {
+      "audius": "RpvPZ"
+    },
+    {
+      "audius": "917qO"
+    },
+    {
+      "audius": "P7BPYo1"
+    },
+    {
+      "audius": "mQGVJZj"
+    },
+    {
+      "audius": "93Vpk"
+    },
+    {
+      "keepExternal": "333039a7-6d04-c1e1-c87e-3b4bba601c32"
+    },
+    {
+      "audius": "QKzvwmG"
+    },
+    {
+      "audius": "5KKaZRX"
+    },
+    {
+      "audius": "5zg5g"
+    },
+    {
+      "audius": "W0NJ0"
+    },
+    {
+      "keepExternal": "37d75658-2495-dac9-cbff-ef15dd8a877c"
+    }
+  ],
+  "verified": [
+    {
+      "id": "917qO",
+      "title": "[City Pop] Party, Party",
+      "artist": "松の葉あそび PineLeaveS",
+      "durationMs": 269000,
+      "permalink": "https://audius.co/MatsunohaAsobi/city-pop-party-party-199155",
+      "artistId": "ebWby",
+      "genre": "Pop",
+      "mood": "Excited",
+      "verifiedAt": "2026-11-27T12:26:11.412Z",
+      "canStream": true
+    },
+    {
+      "id": "P7BPYo1",
+      "title": "Future Funk 2024",
+      "artist": "Strawberry Station🍓",
+      "durationMs": 191000,
+      "permalink": "https://audius.co/StrawberryStat1/future-funk-2024",
+      "artistId": "n0Ko4",
+      "genre": "Disco",
+      "mood": "Sentimental",
+      "verifiedAt": "2026-11-27T12:26:15.529Z",
+      "canStream": true
+    },
+    {
+      "id": "93Vpk",
+      "title": "E t h e r e a l",
+      "artist": "TOKYOPILL",
+      "durationMs": 96000,
+      "permalink": "https://audius.co/tokyopill/e-t-h-e-r-e-a-l",
+      "artistId": "xw8d7",
+      "genre": "Drum & Bass",
+      "mood": "Sentimental",
+      "verifiedAt": "2026-11-27T12:26:18.999Z",
+      "canStream": true
+    },
+    {
+      "id": "W0NJ0",
+      "title": "Ambient Piano Interlude",
+      "artist": "Techwipe",
+      "durationMs": 90000,
+      "permalink": "https://audius.co/techwipe/ambient-piano-interlude-353852",
+      "artistId": "P5amN",
+      "genre": "Electronic",
+      "verifiedAt": "2026-11-27T12:26:27.053Z",
+      "canStream": true
+    },
+    {
+      "id": "RpvPZ",
+      "title": "Jazz BeatSmooth Saxophone Hip Hop Instrumental",
+      "artist": "Beats Love",
+      "durationMs": 204000,
+      "permalink": "https://audius.co/beatslove/jazz-beatsmooth-saxophone-hip-hop-instrumental",
+      "artistId": "827EP",
+      "genre": "Hip-Hop/Rap",
+      "mood": "Upbeat",
+      "verifiedAt": "2026-11-27T12:26:31.110Z",
+      "canStream": true
+    },
+    {
+      "id": "5KKaZRX",
+      "title": "LIVE 2025/9/6 1 - 08 Unreleased Track 02",
+      "artist": "Inner Science",
+      "durationMs": 118000,
+      "permalink": "https://audius.co/masuminishimura/live-202596-1-08-unreleased-track-02",
+      "artistId": "P5a57",
+      "genre": "Electronic",
+      "mood": "Romantic",
+      "verifiedAt": "2026-11-27T12:26:39.360Z",
+      "canStream": true
+    },
+    {
+      "id": "OvGV5gl",
+      "title": "DULLY- Mineko Ogata - Chill Mine Vol.2 Hip Hop Jazz Instrumental",
+      "artist": "Mineko Ogata",
+      "durationMs": 238000,
+      "permalink": "https://audius.co/mineko/dully-mineko-ogata-chill-mine-vol2-hip-hop-jazz-instrumental",
+      "artistId": "6413Zw3",
+      "genre": "Hip-Hop/Rap",
+      "mood": "Easygoing",
+      "verifiedAt": "2026-11-27T12:27:09.793Z",
+      "canStream": true
+    },
+    {
+      "id": "QKzvwmG",
+      "title": "dead leaves / Roger8 (Japanese ambient techno)",
+      "artist": "TAKEO SUZUKI",
+      "durationMs": 536000,
+      "permalink": "https://audius.co/TAKEOSUZUKI/dead-leaves-roger8-japanese-ambient-techno",
+      "artistId": "zgKYR5",
+      "genre": "Tech House",
+      "mood": "Serious",
+      "verifiedAt": "2026-11-27T12:27:17.363Z",
+      "canStream": true
+    },
+    {
+      "id": "mQGVJZj",
+      "title": "Future Funk Shock",
+      "artist": "Goubie グービー",
+      "durationMs": 236000,
+      "permalink": "https://audius.co/jorgeguberte/future-funk-shock",
+      "artistId": "KKzpr",
+      "genre": "Pop",
+      "mood": "Cool",
+      "verifiedAt": "2026-11-27T12:27:34.771Z",
+      "canStream": true
+    },
+    {
+      "id": "5zg5g",
+      "title": "Drizzle in Shibuya",
+      "artist": "Yoshimitsu4432",
+      "durationMs": 166000,
+      "permalink": "https://audius.co/yoshimitsu4432/drizzle-in-shibuya",
+      "artistId": "vJ2jK",
+      "isrc": "QZHN52171204",
+      "genre": "Ambient",
+      "mood": "Melancholy",
+      "verifiedAt": "2026-11-27T12:27:49.357Z",
+      "canStream": true
+    }
+  ],
+  "decision": [
+    {
+      "id": "3e1d6ae4-0ff7-410f-f085-f6b683eb64f0",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "d243b329-5cbb-1698-20f9-3f0cb27ba5f3",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "16a7476e-8259-6342-803e-51079d961490",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "1a2b16fa-6064-70b4-8c77-d303a6067c44",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "86c1d827-7dfd-2db5-1c54-1ae0e5d0a395",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "92e7c93f-1e2a-350a-37f5-44eb178a5eb5",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "f65d07c8-4b1e-9df2-7cec-40be3fa79c60",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "b3a31fef-a8e4-b11a-e688-0275ba3cb257",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "57ef7287-4e1c-f0dd-5c06-18386a0053b4",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "15f98209-3518-ba0e-9082-8319c8cce1e2",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "89ae19fb-a091-c2f9-0a1d-2fc7a0ea14af",
+      "action": "retained-external",
+      "reason": "exact_existing_source"
+    },
+    {
+      "id": "333039a7-6d04-c1e1-c87e-3b4bba601c32",
+      "action": "retained-external",
+      "reason": "exact_existing_source"
+    },
+    {
+      "id": "37d75658-2495-dac9-cbff-ef15dd8a877c",
+      "action": "retained-external",
+      "reason": "exact_existing_source"
+    },
+    {
+      "id": "917qO",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "P7BPYo1",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "93Vpk",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "W0NJ0",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "RpvPZ",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "5KKaZRX",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "OvGV5gl",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "QKzvwmG",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "mQGVJZj",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "5zg5g",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    }
+  ]
+}

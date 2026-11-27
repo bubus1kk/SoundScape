@@ -1,0 +1,104 @@
+{
+  "checks": [
+    {
+      "trackId": "e718d2f1-3167-1ad7-e738-d94cb46c3075",
+      "availability": "EXTERNAL_ONLY",
+      "provider": "APPLE_MUSIC",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "f7c6afe7-482e-48db-b310-76849662332a",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "3cd297bf-f067-4e6e-898f-87dd29f1df3c",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "36d90e23-207e-43c2-84da-a199fcde5a41",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "e194d5f1-0e4f-4739-839f-0f1159009058",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "3fa0b3a1-4790-a019-f8e4-2eeec4ffb099",
+      "availability": "EXTERNAL_ONLY",
+      "provider": "APPLE_MUSIC",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "3df6eb1d-163f-40e7-9f08-bf25366a1063",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "5381c334-a4a5-436c-b8ae-be1451a21cfd",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "cad96ac3-f61e-4e43-9a91-1b5089b0a92e",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "3f53cd53-4b02-4a11-9b55-c721512e55a2",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "be632d0e-01d3-417f-b590-14d3862de595",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "629f18a6-6567-4617-a9f4-46c159ebd21b",
+      "availability": "IN_APP",
+      "provider": "AUDIUS",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    },
+    {
+      "trackId": "2b0df17b-54de-a8b3-3dc7-efd3535a30e4",
+      "availability": "EXTERNAL_ONLY",
+      "provider": "APPLE_MUSIC",
+      "cacheAllowed": false,
+      "downloadAllowed": false
+    }
+  ],
+  "preflight": {
+    "issues": [],
+    "revision": 2,
+    "inAppCount": 10,
+    "approvalValid": false,
+    "readyForApproval": true,
+    "externalOnlyCount": 3,
+    "readyForPublication": false
+  }
+}
