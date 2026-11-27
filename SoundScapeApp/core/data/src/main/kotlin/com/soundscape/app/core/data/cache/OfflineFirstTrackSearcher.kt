@@ -9,7 +9,6 @@ import com.soundscape.app.core.domain.model.MusicSearch
 import com.soundscape.app.core.domain.model.PageRequest
 import com.soundscape.app.core.domain.repository.TrackSearcher
 import com.soundscape.app.core.domain.repository.TrackSearchCache
-import com.soundscape.app.core.network.AccessTokenProvider
 import com.soundscape.app.core.network.ConnectivityChecker
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,10 +17,10 @@ import kotlinx.coroutines.flow.flowOf
 @Singleton
 class OfflineFirstTrackSearcher @Inject constructor(
     private val remote: RemoteTrackSearcher, storage: RoomTrackStorage,
-    connectivity: ConnectivityChecker, tokens: AccessTokenProvider,
+    connectivity: ConnectivityChecker,
 ) : TrackSearcher, TrackSearchCache {
     private val coordinator = PageCoordinator(storage, connectivity::isOffline) {
-        tokens.currentAccessToken().isNullOrBlank()
+        true
     }
     private fun address(parameters: MusicSearch) = PageAddress("guest",
         CacheKeys.search(parameters.query, parameters.onlyInApp, parameters.genreIds, parameters.moodIds),

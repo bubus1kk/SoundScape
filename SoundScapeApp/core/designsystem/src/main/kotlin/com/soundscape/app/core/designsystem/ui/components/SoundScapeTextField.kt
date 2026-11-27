@@ -6,6 +6,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -19,13 +20,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.soundscape.app.core.designsystem.R
 import com.soundscape.app.core.designsystem.ui.theme.SoundScapeTheme
 
@@ -45,6 +49,9 @@ fun SoundScapeTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    externalLabelFieldHeight: Dp? = null,
+    labelHint: String? = null,
 ) {
     val colors = SoundScapeTheme.colors
     val spacing = SoundScapeTheme.spacing
@@ -62,9 +69,19 @@ fun SoundScapeTextField(
         !enabled -> colors.outline
         showError -> colors.danger
         focused -> colors.primary
-        else -> colors.controlOutline
+        else -> if (externalLabelFieldHeight != null) colors.outline else colors.controlOutline
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(spacing.space4)) {
+        if (externalLabelFieldHeight != null) {
+            Row(
+                Modifier.fillMaxWidth().clearAndSetSemantics { },
+                horizontalArrangement = Arrangement.spacedBy(spacing.space8),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = colors.text)
+                labelHint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.textMuted) }
+            }
+        }
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -73,6 +90,7 @@ fun SoundScapeTextField(
             singleLine = singleLine,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
+            visualTransformation = visualTransformation,
             interactionSource = interactionSource,
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 color = if (enabled) colors.text else colors.textMuted,
@@ -86,16 +104,19 @@ fun SoundScapeTextField(
             },
             decorationBox = { innerTextField ->
                 Surface(
-                    shape = MaterialTheme.shapes.medium,
+                    shape = if (externalLabelFieldHeight != null) MaterialTheme.shapes.small
+                    else MaterialTheme.shapes.medium,
                     color = if (enabled) colors.surface else colors.surfaceAlt,
                     border = BorderStroke(borderWidth, borderColor),
                 ) {
                     Column(
-                        Modifier.heightIn(min = 76.dp)
-                            .padding(horizontal = spacing.space16, vertical = spacing.space12),
+                        Modifier.heightIn(min = externalLabelFieldHeight ?: 76.dp).padding(
+                            horizontal = if (externalLabelFieldHeight == null) spacing.space16 else spacing.space12,
+                            vertical = spacing.space12,
+                        ),
                         verticalArrangement = Arrangement.spacedBy(spacing.space4),
                     ) {
-                        Text(
+                        if (externalLabelFieldHeight == null) Text(
                             label,
                             Modifier.clearAndSetSemantics { },
                             color = if (showError) colors.danger else colors.textMuted,
@@ -119,7 +140,8 @@ fun SoundScapeTextField(
         if (message != null) {
             Text(
                 message,
-                Modifier.padding(horizontal = spacing.space16).clearAndSetSemantics { },
+                Modifier.padding(horizontal = if (externalLabelFieldHeight == null) spacing.space16
+                    else spacing.space0).clearAndSetSemantics { },
                 color = if (showError) colors.danger else colors.textMuted,
                 style = MaterialTheme.typography.bodySmall,
             )

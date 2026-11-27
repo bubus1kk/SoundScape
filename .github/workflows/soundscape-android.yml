@@ -9,8 +9,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: soundscape-android-${{ github.ref }}
+  group: soundscape-android-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  SOUNDSCAPE_SUPABASE_URL: https://soundscape-ci.invalid
+  SOUNDSCAPE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fixture
+  SOUNDSCAPE_MAPTILER_API_KEY: ''
 
 jobs:
   domain-jvm:
@@ -60,9 +65,16 @@ jobs:
           test "$(git hash-object core/database/schemas/com.soundscape.app.core.database.SoundScapeDatabase/1.json)" = "b046a41ea9ec536b99fce5134800a1a969fcbd52"
           git diff --exit-code -- core/database/schemas
       - name: Unit tests
-        run: sh ./gradlew :core:database:testDebugUnitTest :app:testDebugUnitTest :presentation:testDebugUnitTest :core:network:testDebugUnitTest :core:data:testDebugUnitTest --no-daemon
+        run: |
+          sh ./gradlew :core:domain:test :core:database:testDebugUnitTest :app:testDebugUnitTest \
+            :presentation:testDebugUnitTest :core:network:testDebugUnitTest :core:data:testDebugUnitTest \
+            :core:designsystem:testDebugUnitTest --no-daemon
+      - name: JVM coverage reports
+        run: sh ./gradlew :core:domain:koverXmlReport :core:domain:koverHtmlReport :presentation:koverXmlReportDebug :presentation:koverHtmlReportDebug --no-daemon
       - name: Detekt
         run: sh ./gradlew detekt --no-daemon
+      - name: Verify JVM test count, coverage and Detekt findings
+        run: python3 ../.github/scripts/verify-android-quality.py
       - name: Android Lint
         run: sh ./gradlew :core:database:lintDebug :app:lintDebug :core:data:lintDebug :core:network:lintDebug :presentation:lintDebug --no-daemon
       - name: Release build and debug-only isolation
@@ -127,7 +139,7 @@ jobs:
           api-level: 35
           arch: x86_64
           disable-animations: true
-          script: cd SoundScapeApp && sh ./gradlew :core:database:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest :app:connectedDebugAndroidTest --max-workers=1 --no-daemon
+          script: sh .github/scripts/android-instrumentation.sh
       - uses: actions/upload-artifact@v4.6.2
         if: always()
         with:
@@ -136,3 +148,5 @@ jobs:
             SoundScapeApp/core/database/build/reports/androidTests/
             SoundScapeApp/app/build/reports/androidTests/
             SoundScapeApp/core/data/build/reports/androidTests/
+            SoundScapeApp/**/build/outputs/androidTest-results/
+            SoundScapeApp/build/instrumentation-diagnostics/

@@ -32,12 +32,14 @@ class SettingsViewModelTest {
         val values = MutableStateFlow(UserSettings())
         var readGate: CompletableDeferred<Unit>? = null
         var failRead = false
+        var failWrite = false
         override val settings get() = flow {
             readGate?.await()
             if (failRead) throw IOException()
             emitAll(values)
         }
         override suspend fun setMode(mode: ThemeMode) {
+            if (failWrite) throw IOException()
             values.value = values.value.copy(mode = mode)
         }
         override suspend fun setPreset(preset: ThemePreset) { values.value = values.value.copy(preset = preset) }
@@ -63,10 +65,26 @@ class SettingsViewModelTest {
         val model = SettingsViewModel(repository)
         assertNull(model.state.value.settings)
         runCurrent()
-        repository.setMode(ThemeMode.DARK); runCurrent()
-        repository.setPreset(ThemePreset.VIOLET); runCurrent()
-        repository.setDynamicColor(true); runCurrent()
+        model.setMode(ThemeMode.DARK); runCurrent()
+        model.setPreset(ThemePreset.VIOLET); runCurrent()
+        model.setDynamicColor(true); runCurrent()
         assertEquals(UserSettings(ThemeMode.DARK, ThemePreset.VIOLET, true), model.state.value.settings)
+    }
+    @Test fun writeFailureKeepsPersistedSelectionAndAllowsAnotherChange() = runTest(dispatcher) {
+        val repository = Fake().apply { failWrite = true }
+        val model = SettingsViewModel(repository)
+        runCurrent()
+        model.setMode(ThemeMode.DARK)
+        assertTrue(model.state.value.saving)
+        runCurrent()
+        assertTrue(model.state.value.writeFailed)
+        assertFalse(model.state.value.saving)
+        assertEquals(ThemeMode.SYSTEM, model.state.value.settings?.mode)
+        repository.failWrite = false
+        model.setMode(ThemeMode.DARK)
+        runCurrent()
+        assertFalse(model.state.value.writeFailed)
+        assertEquals(ThemeMode.DARK, model.state.value.settings?.mode)
     }
     @Test fun readFailureCanBeRetried() = runTest(dispatcher) {
         val repository = Fake().apply { failRead = true }

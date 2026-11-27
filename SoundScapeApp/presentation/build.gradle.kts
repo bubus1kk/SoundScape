@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -23,12 +24,38 @@ detekt {
     config.setFrom(rootProject.file("config/detekt/detekt.yml"))
 }
 
+kover {
+    reports {
+        filters {
+            excludes {
+                annotatedBy("androidx.compose.runtime.Composable")
+                classes(
+                    "com.soundscape.app.presentation.Hilt_*",
+                    "com.soundscape.app.presentation.*.Hilt_*",
+                    "com.soundscape.app.presentation.*.*_Factory",
+                    "com.soundscape.app.presentation.*.*_HiltModules*",
+                    "com.soundscape.app.presentation.R",
+                    "com.soundscape.app.presentation.R$*",
+                    "com.soundscape.app.presentation.BuildConfig",
+                )
+            }
+        }
+    }
+}
+
 dependencies {
+    implementation(libs.maplibre.opengl)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.okhttp)
+    implementation(project(":core:designsystem"))
     testImplementation(libs.kotlinx.coroutines.test)
     implementation(project(":core:domain"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.hilt.android)

@@ -9,7 +9,6 @@ import com.soundscape.app.core.domain.model.GeoBounds
 import com.soundscape.app.core.domain.model.PageRequest
 import com.soundscape.app.core.domain.repository.VisiblePlacesReader
 import com.soundscape.app.core.domain.repository.VisiblePlacesCache
-import com.soundscape.app.core.network.AccessTokenProvider
 import com.soundscape.app.core.network.ConnectivityChecker
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,10 +17,10 @@ import kotlinx.coroutines.flow.flowOf
 @Singleton
 class OfflineFirstVisiblePlaces @Inject constructor(
     private val remote: RemoteVisiblePlacesReader, storage: RoomMapStorage,
-    connectivity: ConnectivityChecker, tokens: AccessTokenProvider,
+    connectivity: ConnectivityChecker,
 ) : VisiblePlacesReader, VisiblePlacesCache {
     private val coordinator = PageCoordinator(storage, connectivity::isOffline) {
-        tokens.currentAccessToken().isNullOrBlank()
+        true
     }
     private fun address(bounds: GeoBounds, page: PageRequest) = PageAddress("guest",
         CacheKeys.map(bounds.southWest.latitude, bounds.southWest.longitude,

@@ -4,7 +4,7 @@ import { logProviderFailure } from './observability.ts';
 import type { RequestContext } from './observability.ts';
 
 export type Provider = 'AUDIUS' | 'GIGACHAT';
-export type ProviderStage = 'search' | 'stream' | 'oauth' | 'generation';
+export type ProviderStage = 'search' | 'metadata' | 'stream' | 'oauth' | 'generation';
 export type NetworkCategory = 'TIMEOUT' | 'DNS' | 'TLS' | 'NETWORK';
 
 /** Exception messages are read *only* to classify a failure, never written to logs. */

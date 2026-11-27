@@ -1,5 +1,5 @@
 import {authenticate,body,bool,ids,int,text,reserve,response,run,HttpError} from '../_shared/core.ts';
-import {findCandidates,localTracks} from '../_shared/catalog.ts';
+import {searchCatalog} from '../_shared/catalog.ts';
 export default { fetch:run(async(req,ctx)=>{
  const session=await authenticate(req);
  const p=await body(req);
@@ -8,13 +8,7 @@ export default { fetch:run(async(req,ctx)=>{
  const onlyInApp=bool(p.onlyInApp);
  const limit=int(p.limit,20,1,50,'limit'),offset=int(p.offset,0,0,1000,'offset');
  await reserve('SEARCH_TRACKS',session.userId,ctx);
- const cached=await localTracks(query,genreIds,moodIds,onlyInApp,100,ctx);
- // If search has no genre/mood filters, Audius may add verified real catalog entries.
- let found=cached;
- if(offset===0 && !genreIds.length&&!moodIds.length && cached.length<limit){
-  try{found=await findCandidates(query,onlyInApp,genreIds,moodIds,limit+1,ctx);}
-  catch(e){if(!cached.length)throw e;}
- }
- const unique=[...new Map(found.map(t=>[t.id,t])).values()];
- return response({items:unique.slice(offset,offset+limit),limit,offset,hasMore:unique.length>offset+limit});
+ const tracks=await searchCatalog(query,{genreIds,moodIds,onlyInApp},offset,limit+1,ctx);
+ return response({items:tracks.slice(0,limit).filter(track=>track!==null),limit,offset,
+   hasMore:tracks.length>limit && offset+limit<=1000});
 },'v1-search-tracks')};

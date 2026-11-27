@@ -1,4 +1,5 @@
 import {authenticate,body,text,uuid,sha256,rpc,reserve,response,run,HttpError} from '../_shared/core.ts';
+import {sharePath} from '../_shared/share_route.ts';
 export default {fetch:run(async(req,ctx)=>{
  const session=await authenticate(req,true),p=await body(req);
  await reserve('MANAGE_SHARE',session.userId,ctx);
@@ -16,5 +17,5 @@ export default {fetch:run(async(req,ctx)=>{
  const token=btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
  const shareId=await rpc('edge_create_share',{p_user:session.userId,p_type:type,p_id:id,p_hash:await sha256(token),p_expires:expiresAt},ctx);
  // Raw token returned ONCE, never stored in database, console, or logs.
- return response({shareId,token,objectType:type,objectId:id,expiresAt},201);
+ return response({shareId,token,objectType:type,objectId:id,expiresAt,routePath:sharePath(type,id,token)},201);
 },'v1-manage-share')};

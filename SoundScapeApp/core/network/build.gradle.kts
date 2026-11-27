@@ -29,6 +29,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockwebserver)
-    testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
+    testImplementation(libs.okhttp.tls)
     implementation(libs.retrofit.serialization)
 }

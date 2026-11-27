@@ -6,6 +6,8 @@ export type RequestContext = Readonly<{
   requestId: string;
   operation: string;
   startedAtMs: number;
+  beforeAudiusRequest?: (stage: 'search' | 'metadata' | 'stream') => Promise<void>;
+  paceAudiusRequest?: () => Promise<void>;
 }>;
 
 const safeName = (name: string, fallback: string): string =>
@@ -34,7 +36,7 @@ export function logRequest(ctx: RequestContext, status: number, code?: string): 
 
 export function logProviderFailure(
   ctx: RequestContext | undefined, provider: 'AUDIUS' | 'GIGACHAT',
-  stage: 'search' | 'stream' | 'oauth' | 'generation', category: string, upstreamStatus?: number,
+  stage: 'search' | 'metadata' | 'stream' | 'oauth' | 'generation', category: string, upstreamStatus?: number,
 ): void {
   const result = {
     event: 'external_api_failure',

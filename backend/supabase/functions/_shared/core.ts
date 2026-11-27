@@ -9,6 +9,8 @@ export class HttpError extends Error {
               public retryAfter?: number) { super(message); }
 }
 export const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Some existing catalog keys were imported as PostgreSQL UUIDs without RFC version/variant bits.
+export const databaseUuidRe = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 export function text(v: unknown, max: number, name: string, min = 1): string {
   if (typeof v !== 'string' || v.trim().length < min || v.length > max)
     throw new HttpError(400, 'VALIDATION_ERROR', `Invalid ${name}`);
@@ -29,6 +31,11 @@ export function uuid(v: unknown, name = 'id'): string {
   if (typeof v !== 'string' || !uuidRe.test(v))
     throw new HttpError(400, 'VALIDATION_ERROR', `Invalid ${name}`);
   return v;
+}
+export function databaseUuid(v: unknown, name: string): string {
+  if (typeof v !== 'string' || !databaseUuidRe.test(v))
+    throw new HttpError(400, 'VALIDATION_ERROR', `Invalid ${name}`);
+  return v.toLowerCase();
 }
 export function ids(v: unknown): number[] {
   if (v === undefined) return [];
@@ -102,7 +109,7 @@ export function secretKey():string {
   if(!x) throw new HttpError(503,'NOT_CONFIGURED','Secret key unavailable');return x;
 }
 // No blanket JWT verification disabled without an explicit auth check: publishable is not a user JWT.
-export async function authenticate(req: Request, required = false): Promise<Session> {
+export async function authenticate(req: Request, required = false, allowPendingAccountDeletion = false): Promise<Session> {
   const key = req.headers.get('apikey');
   const accepted=[publishableKey(),Deno.env.get('SUPABASE_ANON_KEY')||''].filter(Boolean);
   if (!key || !accepted.includes(key)) throw new HttpError(401,'INVALID_API_KEY','Valid publishable key required');
@@ -117,20 +124,42 @@ export async function authenticate(req: Request, required = false): Promise<Sess
   const res=await fetch(supabaseUrl()+'/auth/v1/user',{
     headers:{apikey:publishableKey(),Authorization:`Bearer ${match[1]}`},signal:AbortSignal.timeout(8000)
   }).catch(()=>{throw new HttpError(503,'AUTH_UNAVAILABLE','Authentication unavailable');});
-  if(!res.ok) throw new HttpError(res.status===401||res.status===403?401:503,'INVALID_JWT','Invalid or expired access token');
+  if(!res.ok) {
+    if([401,403,404].includes(res.status))throw new HttpError(401,'INVALID_JWT','Invalid or expired access token');
+    throw new HttpError(503,'AUTH_UNAVAILABLE','Authentication unavailable');
+  }
   const user=await res.json();
   if(!uuidRe.test(user.id||'')) throw new HttpError(401,'INVALID_JWT','Invalid user');
+  // The Auth server has verified the JWT. Use its session ID only to check current revocation.
+  let sessionId: unknown;
+  try {
+    const payload=match[1].split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    sessionId=JSON.parse(atob(payload)).session_id;
+  } catch { /* Missing claims fail closed below. */ }
+  if(typeof sessionId!=='string'||!uuidRe.test(sessionId))
+    throw new HttpError(401,'INVALID_JWT','Invalid session');
+  const sessionActive=await rpc('edge_verify_session',
+    {p_user:user.id,p_session:sessionId,p_allow_pending:allowPendingAccountDeletion});
+  if(sessionActive!==true)throw new HttpError(401,'SESSION_UNAVAILABLE','Session is unavailable');
   return {userId:user.id,jwt:match[1]};
 }
 export function publicHeaders(jwt: string | null):Record<string,string> {
   return {apikey:publishableKey(),...(jwt?{Authorization:`Bearer ${jwt}`}:{})};
 }
+
+/** Legacy service-role JWTs must also be sent as Bearer credentials to local PostgREST. */
+export function privilegedHeaders(): Record<string, string> {
+  const key = secretKey();
+  const isJwt = /^[\w-]+\.[\w-]+\.[\w-]+$/.test(key);
+  return isJwt ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+}
 // Dedicated server-side only Data API. Secret key NEVER comes from a client request.
 export async function adminRest(path: string, init: RequestInit = {}):Promise<Response> {
+  const timeout=AbortSignal.timeout(9000);
   const res=await fetch(supabaseUrl()+'/rest/v1/'+path,{
     ...init,
-    headers:{'apikey':secretKey(),'content-type':'application/json',...(init.headers as Record<string,string>||{})},
-    signal:AbortSignal.timeout(9000),
+    headers:{...privilegedHeaders(),'content-type':'application/json',...(init.headers as Record<string,string>||{})},
+    signal:init.signal?AbortSignal.any([timeout,init.signal]):timeout,
   }).catch(()=>{throw new HttpError(503,'DATABASE_UNAVAILABLE','Database unavailable');});
   return res;
 }
@@ -147,9 +176,9 @@ export async function parseRpcSuccess(res: Response): Promise<unknown> {
   }
 }
 
-export async function rpc(name:string,payload:Record<string,unknown>,ctx?:RequestContext):Promise<any> {
+export async function rpc(name:string,payload:Record<string,unknown>,ctx?:RequestContext,deadline?:AbortSignal):Promise<any> {
   if(!/^edge_[a-z_]+$/.test(name)) throw new HttpError(500,'INTERNAL_ERROR','Invalid RPC');
-  const res=await adminRest('rpc/'+name,{method:'POST',body:JSON.stringify(payload)});
+  const res=await adminRest('rpc/'+name,{method:'POST',body:JSON.stringify(payload),signal:deadline});
   if(!res.ok){
     const problem=await res.json().catch(()=>({}));
     // Do not leak DB internals. Map expected PostgreSQL status to public API.
@@ -194,8 +223,8 @@ export function parseQuotaResult(result: unknown, operation: string):
   }
   throw new HttpError(503,'DATABASE_UNAVAILABLE','Invalid quota response');
 }
-export async function reserve(operation:string,userId:string|null,ctx?:RequestContext):Promise<string|null> {
-  const raw=await rpc('edge_reserve_quota',{p_operation:operation,p_user:userId},ctx);
+export async function reserve(operation:string,userId:string|null,ctx?:RequestContext,deadline?:AbortSignal):Promise<string|null> {
+  const raw=await rpc('edge_reserve_quota',{p_operation:operation,p_user:userId},ctx,deadline);
   let decision:ReturnType<typeof parseQuotaResult>;
   try { decision=parseQuotaResult(raw,operation); }
   catch(e) { logInternalFailure(ctx,'QUOTA_INVALID_RESPONSE','edge_reserve_quota'); throw e; }
@@ -205,11 +234,12 @@ export async function reserve(operation:string,userId:string|null,ctx?:RequestCo
   }
   return decision.leaseId;
 }
-export async function release(lease:string|null,ctx?:RequestContext){if(lease){try {await rpc('edge_release_generation',{p_lease:lease},ctx);}catch{logInternalFailure(ctx,'LEASE_RELEASE_ERROR','edge_release_generation');}}}
-export async function select(table:string,query:string,jwt:string|null,privileged=false,ctx?:RequestContext):Promise<any[]> {
+export async function release(lease:string|null,ctx?:RequestContext){if(lease){try {await rpc('edge_release_generation',{p_lease:lease},ctx,AbortSignal.timeout(2000));}catch{logInternalFailure(ctx,'LEASE_RELEASE_ERROR','edge_release_generation');}}}
+export async function select(table:string,query:string,jwt:string|null,privileged=false,ctx?:RequestContext,deadline?:AbortSignal):Promise<any[]> {
   if(!/^[a-z_]+$/.test(table)) throw new HttpError(500,'INTERNAL_ERROR','Invalid table');
   const url=supabaseUrl()+'/rest/v1/'+table+'?'+query;
-  const res=await fetch(url,{headers:privileged?{'apikey':secretKey()}:publicHeaders(jwt),signal:AbortSignal.timeout(9000)})
+  const timeout=AbortSignal.timeout(9000);
+  const res=await fetch(url,{headers:privileged?privilegedHeaders():publicHeaders(jwt),signal:deadline?AbortSignal.any([timeout,deadline]):timeout})
     .catch(()=>{logInternalFailure(ctx,'DATABASE_QUERY_ERROR',table);throw new HttpError(503,'DATABASE_UNAVAILABLE','Database unavailable');});
   if(!res.ok) {logInternalFailure(ctx,'DATABASE_QUERY_ERROR',table,res.status);throw new HttpError(503,'DATABASE_UNAVAILABLE','Database query failed');}
   const data=await res.json();return Array.isArray(data)?data:[];

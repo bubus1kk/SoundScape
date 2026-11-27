@@ -1,0 +1,607 @@
+{
+  "version": 1,
+  "city": "london",
+  "placeId": "993c5240-1aed-4a7a-aca4-2094f7f7f84c",
+  "playlistId": "2ba4fc9e-2ba4-5117-b3c7-89f4b3724477",
+  "expectedRevision": 1,
+  "original": {
+    "city": "london",
+    "placeId": "993c5240-1aed-4a7a-aca4-2094f7f7f84c",
+    "playlistId": "2ba4fc9e-2ba4-5117-b3c7-89f4b3724477",
+    "title": "Лондон: ритмы на обратном пути",
+    "description": "Сломанный ночной ритм Burial, точная речь Little Simz и коллективная энергия Ezra Collective рисуют город без единого центра. Здесь соседствуют одиночество позднего автобуса и тепло заполненного зала. Маршрут постепенно выходит из полутени к живым духовым и танцу; связи между треками построены на пульсе, голосе и пространстве. Живой джазовый ансамбль развивает ритмическую линию Ezra Collective. Гостевые Venna и Charlie Stacey сохранены в точном названии.",
+    "coverPath": "editorial/capitals/v1/london-dd57bb1bfa7eed75.png",
+    "revision": 1,
+    "visibility": "PRIVATE",
+    "publishedAt": null,
+    "genreIds": [
+      14,
+      15,
+      16
+    ],
+    "tagIds": [
+      19,
+      20,
+      21,
+      22
+    ],
+    "tracks": [
+      {
+        "id": "e718d2f1-3167-1ad7-e738-d94cb46c3075",
+        "title": "Archangel",
+        "artist": "Burial",
+        "artists": [
+          "Burial"
+        ],
+        "durationMs": 238427,
+        "sources": [
+          {
+            "id": "9432d900-2937-5501-4644-535da2879fa9",
+            "provider": "APPLE_MUSIC",
+            "track_id": "e718d2f1-3167-1ad7-e738-d94cb46c3075",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/archangel/893175779?i=893175788&uo=4",
+            "provider_track_id": "893175788"
+          }
+        ]
+      },
+      {
+        "id": "3fa0b3a1-4790-a019-f8e4-2eeec4ffb099",
+        "title": "Point and Kill (feat. Obongjayar)",
+        "artist": "Little Simz",
+        "artists": [
+          "Little Simz",
+          "Obongjayar"
+        ],
+        "durationMs": 185600,
+        "sources": [
+          {
+            "id": "df8963b3-6ffb-dfd8-ca4e-969ec3611b11",
+            "provider": "APPLE_MUSIC",
+            "track_id": "3fa0b3a1-4790-a019-f8e4-2eeec4ffb099",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/point-and-kill-feat-obongjayar/1561184260?i=1561184461&uo=4",
+            "provider_track_id": "1561184461"
+          }
+        ]
+      },
+      {
+        "id": "a22a2585-a535-b5c0-ec60-4022fcf6870c",
+        "title": "Near Dark",
+        "artist": "Burial",
+        "artists": [
+          "Burial"
+        ],
+        "durationMs": 234507,
+        "sources": [
+          {
+            "id": "466c0eeb-8fd1-fb1b-f0a9-a47a25c27f37",
+            "provider": "APPLE_MUSIC",
+            "track_id": "a22a2585-a535-b5c0-ec60-4022fcf6870c",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/near-dark/893175779?i=893175789&uo=4",
+            "provider_track_id": "893175789"
+          }
+        ]
+      },
+      {
+        "id": "2ea1a362-68a7-4b35-aaa1-eb57e2d77ba3",
+        "title": "No One's Watching Me (feat. Olivia Dean)",
+        "artist": "Ezra Collective",
+        "artists": [
+          "Ezra Collective",
+          "Olivia Dean"
+        ],
+        "durationMs": 262307,
+        "sources": [
+          {
+            "id": "a918780b-ff71-33e0-49e4-d641a2fc0126",
+            "provider": "APPLE_MUSIC",
+            "track_id": "2ea1a362-68a7-4b35-aaa1-eb57e2d77ba3",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/no-ones-watching-me-feat-olivia-dean/1783201685?i=1783202348&uo=4",
+            "provider_track_id": "1783202348"
+          }
+        ]
+      },
+      {
+        "id": "6dbd01ba-a0ad-cfae-cb83-032435b4cbe3",
+        "title": "Picture Perfect",
+        "artist": "Little Simz",
+        "artists": [
+          "Little Simz"
+        ],
+        "durationMs": 183197,
+        "sources": [
+          {
+            "id": "af599092-0610-48c9-7cca-dc29bcc209ea",
+            "provider": "APPLE_MUSIC",
+            "track_id": "6dbd01ba-a0ad-cfae-cb83-032435b4cbe3",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/picture-perfect/1179332853?i=1179332956&uo=4",
+            "provider_track_id": "1179332956"
+          }
+        ]
+      },
+      {
+        "id": "1ed2c937-3a90-7a28-2ff6-829d06d716e0",
+        "title": "Ghost Hardware",
+        "artist": "Burial",
+        "artists": [
+          "Burial"
+        ],
+        "durationMs": 293093,
+        "sources": [
+          {
+            "id": "e58e1548-277b-8fa6-7528-2b7a3414dfd6",
+            "provider": "APPLE_MUSIC",
+            "track_id": "1ed2c937-3a90-7a28-2ff6-829d06d716e0",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/ghost-hardware/893175779?i=893175790&uo=4",
+            "provider_track_id": "893175790"
+          }
+        ]
+      },
+      {
+        "id": "b8eb49b3-2abb-a568-7886-546214c303b8",
+        "title": "Backseat",
+        "artist": "Little Simz",
+        "artists": [
+          "Little Simz"
+        ],
+        "durationMs": 211286,
+        "sources": [
+          {
+            "id": "ef954488-29b6-50f7-f202-cfab3df2fb6d",
+            "provider": "APPLE_MUSIC",
+            "track_id": "b8eb49b3-2abb-a568-7886-546214c303b8",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/backseat/1232551181?i=1232551194&uo=4",
+            "provider_track_id": "1232551194"
+          }
+        ]
+      },
+      {
+        "id": "2b0df17b-54de-a8b3-3dc7-efd3535a30e4",
+        "title": "God Gave Me Feet For Dancing (feat. Yazmin Lacey)",
+        "artist": "Ezra Collective",
+        "artists": [
+          "Ezra Collective",
+          "Yazmin Lacey"
+        ],
+        "durationMs": 239307,
+        "sources": [
+          {
+            "id": "a4477d9b-270c-0c24-e7ad-6b9725bc4d11",
+            "provider": "APPLE_MUSIC",
+            "track_id": "2b0df17b-54de-a8b3-3dc7-efd3535a30e4",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/god-gave-me-feet-for-dancing-feat-yazmin-lacey/1783201685?i=1783201933&uo=4",
+            "provider_track_id": "1783201933"
+          }
+        ]
+      },
+      {
+        "id": "b9dedf10-8832-f577-e030-1469c142b71a",
+        "title": "Raver",
+        "artist": "Burial",
+        "artists": [
+          "Burial"
+        ],
+        "durationMs": 299827,
+        "sources": [
+          {
+            "id": "a4fb8b53-8e6b-6b07-3444-055922993720",
+            "provider": "APPLE_MUSIC",
+            "track_id": "b9dedf10-8832-f577-e030-1469c142b71a",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/raver/893175779?i=893175801&uo=4",
+            "provider_track_id": "893175801"
+          }
+        ]
+      },
+      {
+        "id": "5c7713d8-acc2-e8ea-fb32-2dad255baf14",
+        "title": "Only (feat. Lydia Kitto)",
+        "artist": "Little Simz",
+        "artists": [
+          "Little Simz",
+          "Lydia Kitto"
+        ],
+        "durationMs": 215987,
+        "sources": [
+          {
+            "id": "ac7db535-085a-354c-477b-48458106869c",
+            "provider": "APPLE_MUSIC",
+            "track_id": "5c7713d8-acc2-e8ea-fb32-2dad255baf14",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/only-feat-lydia-kitto/1794880972?i=1794880987&uo=4",
+            "provider_track_id": "1794880987"
+          }
+        ]
+      },
+      {
+        "id": "f1063816-e6db-8870-ea62-fd1129fe12e6",
+        "title": "Palm Wine",
+        "artist": "Ezra Collective",
+        "artists": [
+          "Ezra Collective"
+        ],
+        "durationMs": 313773,
+        "sources": [
+          {
+            "id": "2ec77c70-7ce5-9822-6630-da33c1d38b1a",
+            "provider": "APPLE_MUSIC",
+            "track_id": "f1063816-e6db-8870-ea62-fd1129fe12e6",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/palm-wine/1783201685?i=1783201692&uo=4",
+            "provider_track_id": "1783201692"
+          }
+        ]
+      },
+      {
+        "id": "3496b2a5-4494-b1cb-39b0-244ba8a45935",
+        "title": "Shaking Body",
+        "artist": "Ezra Collective",
+        "artists": [
+          "Ezra Collective"
+        ],
+        "durationMs": 192907,
+        "sources": [
+          {
+            "id": "93cc7559-30a6-2245-5ce9-8938b861dc75",
+            "provider": "APPLE_MUSIC",
+            "track_id": "3496b2a5-4494-b1cb-39b0-244ba8a45935",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/shaking-body/1783201685?i=1783202464&uo=4",
+            "provider_track_id": "1783202464"
+          }
+        ]
+      },
+      {
+        "id": "b7dd2709-81b9-13a3-9caa-195d2de10940",
+        "title": "Black Classical Music (feat. Venna & Charlie Stacey)",
+        "artist": "Yussef Dayes",
+        "artists": [
+          "Yussef Dayes",
+          "Venna",
+          "Charlie Stacey"
+        ],
+        "durationMs": 319040,
+        "sources": [
+          {
+            "id": "2ecc6ca6-b1b4-1031-ab7c-c880c35818c3",
+            "provider": "APPLE_MUSIC",
+            "track_id": "b7dd2709-81b9-13a3-9caa-195d2de10940",
+            "can_cache": false,
+            "can_stream": false,
+            "verified_at": "2026-11-17T12:56:01.030169+03:00",
+            "can_download": false,
+            "external_url": "https://music.apple.com/us/album/black-classical-music-feat-venna-charlie-stacey/1683439010?i=1683439012&uo=4",
+            "provider_track_id": "1683439012"
+          }
+        ]
+      }
+    ]
+  },
+  "slots": [
+    {
+      "keepExternal": "e718d2f1-3167-1ad7-e738-d94cb46c3075"
+    },
+    {
+      "audius": "Ax9d0"
+    },
+    {
+      "audius": "0XZjr66"
+    },
+    {
+      "audius": "g6YbwRl"
+    },
+    {
+      "audius": "ydmb9zY"
+    },
+    {
+      "keepExternal": "3fa0b3a1-4790-a019-f8e4-2eeec4ffb099"
+    },
+    {
+      "audius": "g4r4ad"
+    },
+    {
+      "audius": "bdl05qM"
+    },
+    {
+      "audius": "w7J2k"
+    },
+    {
+      "audius": "r27w9"
+    },
+    {
+      "audius": "KlWWKRY"
+    },
+    {
+      "audius": "xkpMbkx"
+    },
+    {
+      "keepExternal": "2b0df17b-54de-a8b3-3dc7-efd3535a30e4"
+    }
+  ],
+  "verified": [
+    {
+      "id": "KlWWKRY",
+      "title": "House Of Jazz",
+      "artist": "Ljazz",
+      "durationMs": 170000,
+      "permalink": "https://audius.co/Ljazz_beats/house-of-jazz",
+      "artistId": "WgR5dAk",
+      "genre": "Hip-Hop/Rap",
+      "mood": "Cool",
+      "verifiedAt": "2026-11-27T12:32:13.874Z",
+      "canStream": true
+    },
+    {
+      "id": "g4r4ad",
+      "title": "FATAL ATTRACTION (EVOL)",
+      "artist": "Harvey Whyte",
+      "durationMs": 194000,
+      "permalink": "https://audius.co/Harveywhyte/fatal-attraction-evol",
+      "artistId": "NzaKQ",
+      "genre": "Hip-Hop/Rap",
+      "mood": "Melancholy",
+      "verifiedAt": "2026-11-27T12:32:55.975Z",
+      "canStream": true
+    },
+    {
+      "id": "Ax9d0",
+      "title": "Coco Bryce - U I Luv",
+      "artist": "Critical Music",
+      "durationMs": 289000,
+      "permalink": "https://audius.co/CriticalMusic/coco-bryce-u-i-luv-98372",
+      "artistId": "nQ2OW",
+      "isrc": "GBVPL2000077",
+      "genre": "Jungle",
+      "mood": "Serious",
+      "verifiedAt": "2026-11-27T12:34:25.061Z",
+      "canStream": true
+    },
+    {
+      "id": "g6YbwRl",
+      "title": "Ventriloquist - Chris Gresswell",
+      "artist": "Chris Gresswell",
+      "durationMs": 336000,
+      "permalink": "https://audius.co/ChrisGresswell/ventriloquist-chris-gresswell",
+      "artistId": "6Y3Mykl",
+      "isrc": "SE6QE2451756",
+      "genre": "Electronic",
+      "mood": "Excited",
+      "verifiedAt": "2026-11-27T12:34:29.260Z",
+      "canStream": true
+    },
+    {
+      "id": "0XZjr66",
+      "title": "Vesin - Mustbluv",
+      "artist": "Vesin",
+      "durationMs": 178000,
+      "permalink": "https://audius.co/byvesin/vesin-mustbluv",
+      "artistId": "o75WR",
+      "genre": "Electronic",
+      "mood": "Stirring",
+      "verifiedAt": "2026-11-27T12:34:34.885Z",
+      "canStream": true
+    },
+    {
+      "id": "xkpMbkx",
+      "title": "Caleb Arredondo - Echo Sax Revival",
+      "artist": "College Music",
+      "durationMs": 75000,
+      "permalink": "https://audius.co/collegemusic/caleb-arredondo-echo-sax-revival",
+      "artistId": "D2P6Z",
+      "isrc": "DGA072434958",
+      "genre": "Jazz",
+      "mood": "Tender",
+      "verifiedAt": "2026-11-27T12:34:38.961Z",
+      "canStream": true
+    },
+    {
+      "id": "ydmb9zY",
+      "title": "TCHDWN - I'll Find You",
+      "artist": "Quality Goods Records",
+      "durationMs": 230000,
+      "permalink": "https://audius.co/QGRecs/tchdwn-ill-find-you",
+      "artistId": "D97oa",
+      "isrc": "CAR072400015",
+      "genre": "Future House",
+      "mood": "Cool",
+      "verifiedAt": "2026-11-27T12:34:42.879Z",
+      "canStream": true
+    },
+    {
+      "id": "w7J2k",
+      "title": "Stay",
+      "artist": "Senpu",
+      "durationMs": 125000,
+      "permalink": "https://audius.co/senpu/stay-110536",
+      "artistId": "DBO9Y",
+      "isrc": "QZK6H2061569",
+      "genre": "R&B/Soul",
+      "mood": "Empowering",
+      "verifiedAt": "2026-11-27T12:34:58.206Z",
+      "canStream": true
+    },
+    {
+      "id": "bdl05qM",
+      "title": "London Calling",
+      "artist": "Lokdah",
+      "durationMs": 170000,
+      "permalink": "https://audius.co/lokthaphoenix/london-calling",
+      "artistId": "y891x",
+      "genre": "Hip-Hop/Rap",
+      "verifiedAt": "2026-11-27T12:35:26.224Z",
+      "canStream": true
+    },
+    {
+      "id": "r27w9",
+      "title": "Run Away",
+      "artist": "House of EL",
+      "durationMs": 199000,
+      "permalink": "https://audius.co/iamhouseofel/run-away-432574",
+      "artistId": "V4YP9",
+      "genre": "R&B/Soul",
+      "mood": "Easygoing",
+      "verifiedAt": "2026-11-27T12:36:11.954Z",
+      "canStream": true
+    }
+  ],
+  "decision": [
+    {
+      "id": "a22a2585-a535-b5c0-ec60-4022fcf6870c",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "2ea1a362-68a7-4b35-aaa1-eb57e2d77ba3",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "6dbd01ba-a0ad-cfae-cb83-032435b4cbe3",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "1ed2c937-3a90-7a28-2ff6-829d06d716e0",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "b8eb49b3-2abb-a568-7886-546214c303b8",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "b9dedf10-8832-f577-e030-1469c142b71a",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "5c7713d8-acc2-e8ea-fb32-2dad255baf14",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "f1063816-e6db-8870-ea62-fd1129fe12e6",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "3496b2a5-4494-b1cb-39b0-244ba8a45935",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "b7dd2709-81b9-13a3-9caa-195d2de10940",
+      "action": "removed-from-playlist",
+      "reason": "curated_replacement"
+    },
+    {
+      "id": "e718d2f1-3167-1ad7-e738-d94cb46c3075",
+      "action": "retained-external",
+      "reason": "exact_existing_source"
+    },
+    {
+      "id": "3fa0b3a1-4790-a019-f8e4-2eeec4ffb099",
+      "action": "retained-external",
+      "reason": "exact_existing_source"
+    },
+    {
+      "id": "2b0df17b-54de-a8b3-3dc7-efd3535a30e4",
+      "action": "retained-external",
+      "reason": "exact_existing_source"
+    },
+    {
+      "id": "KlWWKRY",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "g4r4ad",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "Ax9d0",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "g6YbwRl",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "0XZjr66",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "xkpMbkx",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "ydmb9zY",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "w7J2k",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "bdl05qM",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    },
+    {
+      "id": "r27w9",
+      "action": "added",
+      "reason": "curated_verified_atmospheric_candidate"
+    }
+  ]
+}

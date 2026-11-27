@@ -18,8 +18,10 @@ class GeneratePlaylistUseCase(private val auth: AuthRepository, private val gene
                 if (request.prompt.isNullOrBlank() && options.genre.isNullOrBlank() && options.mood.isNullOrBlank() &&
                     options.genreIds.isEmpty() && options.moodIds.isEmpty()) return invalid("theme", "required")
             }
-            is GenerationRequest.Journey -> if (request.stops.size < 2) return invalid("stops", "min_2")
-            is GenerationRequest.Place -> Unit
+            is GenerationRequest.Journey -> if (request.stops.size !in 2..50) return invalid("stops", "min_2")
+            is GenerationRequest.Place -> if ((request.prompt?.length ?: 0) > 1000) {
+                return invalid("prompt", "max_1000")
+            }
         }
         val user = auth.currentUser()
         if (user is DomainResult.Failure) return user
