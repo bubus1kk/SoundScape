@@ -1,8 +1,25 @@
 import {authenticate,body,text,uuid,reserve,rpc,sha256,run,HttpError,supabaseUrl,privilegedHeaders,response} from '../_shared/core.ts';
 import {ownedPaths, removeMedia} from '../_shared/media_cleanup.ts';
 import {matchesImage} from '../_shared/image.ts';
+import {maintenanceAuthorized} from '../_shared/maintenance_auth.ts';
 export default {fetch:run(async(req,ctx)=>{
- const session=await authenticate(req),p=await body(req);
+ const p=await body(req).catch(async error => {
+   await authenticate(req);
+   throw error;
+ });
+ if (p.action === 'PROCESS_PENDING') {
+   if (Object.keys(p).length !== 1 || !await maintenanceAuthorized(req)) {
+     throw new HttpError(401,'AUTH_REQUIRED','Service credential required');
+   }
+   const batch = await rpc('edge_claim_pending_media_cleanup',{},ctx);
+   if (batch === null) return response({status:'IDLE'});
+   const userId = uuid(batch?.userId,'userId');
+   const paths = ownedPaths(batch?.paths,userId,20);
+   await removeMedia(paths);
+   await rpc('edge_complete_media_cleanup',{p_user:userId,p_paths:paths},ctx);
+   return response({status:'PROCESSED',processed:paths.length});
+ }
+ const session=await authenticate(req);
  if (p.action === 'CLEANUP') {
    if (!session.userId) throw new HttpError(401,'AUTH_REQUIRED','Sign in required');
    await reserve('MEDIA',session.userId,ctx);
