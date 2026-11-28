@@ -3,6 +3,7 @@ package com.soundscape.app.core.domain.model
 import java.time.LocalDate
 import java.util.UUID
 
+/** Editable playlist fields, including the requested order of track occurrences. */
 data class PlaylistInput(
     val title: String,
     val visibility: Visibility,
@@ -13,6 +14,7 @@ data class PlaylistInput(
     val tagIds: List<Int> = emptyList(),
 )
 
+/** Editable fields for a musical pin and its attachments. */
 data class MusicPinInput(
     val title: String,
     val coordinates: GeoPoint,
@@ -23,6 +25,7 @@ data class MusicPinInput(
     val visitDate: LocalDate? = null,
 )
 
+/** Editable fields for a diary entry and its optional pin or map location. */
 data class DiaryInput(
     val title: String,
     val date: LocalDate,
@@ -35,6 +38,7 @@ data class DiaryInput(
     val body: String? = null,
 )
 
+/** Editable journey metadata and ordered stops. */
 data class JourneyInput(
     val title: String,
     val visibility: Visibility,

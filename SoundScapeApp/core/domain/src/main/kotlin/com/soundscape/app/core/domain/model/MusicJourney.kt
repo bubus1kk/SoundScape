@@ -1,8 +1,11 @@
 package com.soundscape.app.core.domain.model
 
 import java.util.UUID
+/** Place and pin identifiers are distinct in an ordered route. */
 enum class JourneyStopKind { PLACE, PIN }
+/** One reference in an ordered journey. */
 data class JourneyStop(val id: UUID, val kind: JourneyStopKind)
+/** A stored journey, including recoverable incomplete routes. */
 data class MusicJourney(
     val id: UUID,
     val ownerId: UUID,
@@ -11,12 +14,15 @@ data class MusicJourney(
     val stops: List<JourneyStop>,
     val revision: Long,
     val playlistId: UUID? = null,
+    val route: JourneyRoute? = null,
 ) {
-    fun validate(): DomainResult<Unit> {
-        val titleResult = validateTitle(title)
-        if (titleResult is DomainResult.Failure) return titleResult
-        if (revision < 1) return invalid("revision", "positive")
-        if (stops.size !in 2..50) return invalid("stops", "count_2_to_50")
-        return DomainResult.Success(Unit)
+    /** Checks the journey snapshot without discarding editable incomplete routes. */
+    fun validate(): DomainResult<Unit> = validateTitle(title).flatMap {
+        val incomplete = stops.size < MIN_JOURNEY_STOPS && route?.status != JourneyRouteStatus.NEEDS_EDIT
+        when {
+            revision < 1 -> invalid("revision", "positive")
+            stops.size > MAX_JOURNEY_STOPS || incomplete -> invalid("stops", "count_2_to_50")
+            else -> DomainResult.Success(Unit)
+        }
     }
 }

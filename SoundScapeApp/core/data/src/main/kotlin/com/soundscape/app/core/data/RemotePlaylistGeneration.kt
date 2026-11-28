@@ -87,7 +87,9 @@ internal fun GenerationRequest.toDto(): GenerationDto {
     return when (this) {
         is GenerationRequest.Quick -> base.copy(mode = "QUICK", prompt = prompt)
         is GenerationRequest.Advanced -> base.copy(mode = "ADVANCED", prompt = prompt)
-        is GenerationRequest.Place -> base.copy(mode = "PLACE", placeId = placeId.toString(), prompt = prompt)
+        is GenerationRequest.Place -> base.copy(
+            mode = "PLACE", placeId = placeId?.toString(), musicPinId = musicPinId?.toString(), prompt = prompt,
+        )
         is GenerationRequest.Journey -> base.copy(
             mode = "JOURNEY",
             stops = stops.mapIndexed { index, stop ->

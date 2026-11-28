@@ -13,6 +13,7 @@ import com.soundscape.app.core.domain.repository.GlobalSearchRepository
 import com.soundscape.app.core.domain.repository.SearchCategory
 import com.soundscape.app.core.domain.repository.SearchFacet
 import com.soundscape.app.core.domain.repository.SearchHit
+import com.soundscape.app.core.domain.repository.SearchPlaceKind
 import com.soundscape.app.core.domain.repository.SearchOption
 import com.soundscape.app.core.network.GlobalSearchApi
 import com.soundscape.app.core.network.GlobalSearchRequestDto
@@ -64,7 +65,8 @@ class RemoteGlobalSearchRepository @Inject constructor(
             require(response.limit == limit && response.offset == offset && response.items.size <= limit)
             Page(response.items.map {
                 SearchHit(SearchCategory.valueOf(it.category), UUID.fromString(it.id), it.title, it.subtitle,
-                    it.coverPath, it.availability?.let(TrackAvailability::valueOf))
+                    it.coverPath, it.availability?.let(TrackAvailability::valueOf),
+                    it.placeKind?.let(SearchPlaceKind::valueOf))
             }, response.hasMore && response.items.isNotEmpty() && offset + limit <= MAX_OFFSET)
         }
     }
@@ -76,8 +78,8 @@ class RemoteGlobalSearchRepository @Inject constructor(
 
     private fun GlobalSearch.toDto(limit: Int, offset: Int) = GlobalSearchRequestDto(
         query, categories = category?.let { listOf(it.name) },
-        genreIds = listOfNotNull(filters.genreId), moodIds = listOfNotNull(filters.moodId),
-        onlyInApp = filters.onlyInApp, limit = limit, offset = offset,
+        genreIds = filters.selectedGenreIds, moodIds = filters.selectedMoodIds,
+        onlyInApp = filters.onlyInApp, limit = limit, offset = offset, includePublicMusicPins = includePublicMusicPins,
     )
 
     private fun decodeHistory(raw: String?): List<String> =

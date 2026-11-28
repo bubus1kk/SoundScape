@@ -114,8 +114,8 @@ internal fun DomainError.message() = when (this) {
     DomainError.AlreadyExists, DomainError.VersionConflict -> "Плейлист уже существует или был изменён"
     DomainError.Network, DomainError.Timeout -> "Не удалось связаться с сервером"
     is DomainError.RateLimited -> "Лимит запросов исчерпан"
-    is DomainError.Validation -> if (reason == "no_candidates") "Не удалось подобрать композиции"
-        else "Сервер отклонил параметры запроса"
-    DomainError.Unexpected -> "Сервер вернул некорректный ответ"
+    DomainError.NoCandidates -> "Не удалось подобрать композиции"
+    is DomainError.Validation -> "Сервер отклонил параметры запроса"
+    DomainError.Unexpected, is DomainError.InvalidGeneration -> "Сервер вернул некорректный ответ"
     else -> "Сервис временно недоступен"
 }

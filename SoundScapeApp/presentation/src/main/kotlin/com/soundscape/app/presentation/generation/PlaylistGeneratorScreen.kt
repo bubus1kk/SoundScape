@@ -199,7 +199,7 @@ private fun GeneratorNotices(state: WorkshopState) {
     if (state.generating) GeneratorNotice("Подбираем музыку…",
         "Проверяем кандидатов из музыкального каталога.", loading = true)
     state.generationError?.let { error ->
-        val noCandidates = error is DomainError.Validation && error.reason == "no_candidates"
+        val noCandidates = error == DomainError.NoCandidates
         GeneratorNotice(if (error == DomainError.Server) "Не удалось создать подборку" else error.message(),
             if (noCandidates) "Попробуй изменить запрос или параметры."
             else "Параметры не потеряны. Генерацию можно повторить.", loading = false)

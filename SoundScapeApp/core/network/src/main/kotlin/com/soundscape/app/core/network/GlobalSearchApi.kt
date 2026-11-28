@@ -16,6 +16,7 @@ data class GlobalSearchRequestDto(
     val onlyInApp: Boolean,
     val limit: Int,
     val offset: Int,
+    val includePublicMusicPins: Boolean = false,
 )
 
 @Serializable
@@ -26,6 +27,7 @@ data class SearchHitDto(
     val subtitle: String? = null,
     val coverPath: String? = null,
     val availability: String? = null,
+    val placeKind: String? = null,
 )
 
 @Serializable

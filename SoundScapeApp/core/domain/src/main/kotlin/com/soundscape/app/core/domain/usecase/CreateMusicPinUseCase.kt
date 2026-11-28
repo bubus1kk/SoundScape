@@ -1,18 +1,18 @@
 package com.soundscape.app.core.domain.usecase
 
-import com.soundscape.app.core.domain.model.*
-import com.soundscape.app.core.domain.repository.*
+import com.soundscape.app.core.domain.model.DomainResult
+import com.soundscape.app.core.domain.model.MusicPin
+import com.soundscape.app.core.domain.model.MusicPinInput
+import com.soundscape.app.core.domain.model.flatMap
+import com.soundscape.app.core.domain.repository.AuthRepository
+import com.soundscape.app.core.domain.repository.MusicPinRepository
 import java.util.UUID
 
+/** Creates a music pin from an authenticated user's validated input. */
 class CreateMusicPinUseCase(private val auth: AuthRepository, private val pins: MusicPinRepository) {
-    suspend operator fun invoke(id: UUID, input: MusicPinInput): DomainResult<MusicPin> {
-        val title = validateTitle(input.title)
-        if (title is DomainResult.Failure) return title
-        val attachments = validateAttachments(input.trackIds, input.photos, 5)
-        if (attachments is DomainResult.Failure) return attachments
-        val user = auth.currentUser()
-        if (user is DomainResult.Failure) return user
-        if ((user as DomainResult.Success).value == null) return DomainResult.Failure(DomainError.Unauthenticated)
-        return pins.create(id, input)
-    }
+    /** Saves the pin using its stable identity. */
+    suspend operator fun invoke(id: UUID, input: MusicPinInput): DomainResult<MusicPin> =
+        validatePin(input)
+            .flatMap { auth.requireCurrentUser() }
+            .flatMap { pins.create(id, input) }
 }

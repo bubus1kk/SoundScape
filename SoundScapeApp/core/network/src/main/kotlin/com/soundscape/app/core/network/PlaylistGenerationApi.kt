@@ -25,6 +25,7 @@ data class GenerationDto(
     val moodIds: List<Int> = emptyList(),
     val placeId: String? = null,
     val stops: List<GenerationStopDto> = emptyList(),
+    val musicPinId: String? = null,
 )
 
 @Serializable
