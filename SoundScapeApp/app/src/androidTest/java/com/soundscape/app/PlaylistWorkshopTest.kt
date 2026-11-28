@@ -146,7 +146,7 @@ class PlaylistWorkshopTest {
             "journey" to base.copy(form = quick.copy(mode = GenerationMode.JOURNEY, stops = listOf(paris, berlin))),
             "loading" to base.copy(generating = true),
             "error" to base.copy(generationError = DomainError.Server),
-            "no-candidates" to base.copy(generationError = DomainError.Validation("tracks", "no_candidates")),
+            "no-candidates" to base.copy(generationError = DomainError.NoCandidates),
             "quota" to base.copy(generationError = DomainError.RateLimited()),
             "offline" to base,
             "auth" to base.copy(account = null, generationError = DomainError.Unauthenticated),
@@ -238,7 +238,8 @@ class PlaylistWorkshopTest {
             generations++
             this.request = request
             return DomainResult.Success(GeneratedPlaylistDraft("Тестовая подборка", "Ответ тестового каталога",
-                listOf(GeneratedItem(second), GeneratedItem(first)), listOf("Проверочный ответ")))
+                listOf(GeneratedItem(second, availability = TrackAvailability.IN_APP),
+                    GeneratedItem(first, availability = TrackAvailability.IN_APP)), listOf("Проверочный ответ")))
         }
 
         override suspend fun create(id: UUID, input: PlaylistInput): DomainResult<Playlist> {

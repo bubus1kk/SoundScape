@@ -189,7 +189,7 @@ internal class FakeResolver : PlaybackSourceResolver {
         return result
     }
 }
-internal class FakePlayer : PlaybackController {
+internal class FakePlayer : PlaybackStarter {
     var result: DomainResult<Unit> = DomainResult.Success(Unit)
     var calls = 0
     var source: PlaybackSource.InApp? = null

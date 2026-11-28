@@ -48,6 +48,7 @@ class RemotePlaylistGenerationTest {
                         GenerationOptions(20, true, genreIds = listOf(7), moodIds = listOf(2)),
                     ),
                     GenerationRequest.Place(a, prompt = "quiet"),
+                    GenerationRequest.Place(musicPinId = b),
                     GenerationRequest.Journey(
                         listOf(
                             JourneyStop(b, JourneyStopKind.PLACE),
@@ -55,7 +56,7 @@ class RemotePlaylistGenerationTest {
                         )
                     ),
                 )
-            requests.zip(listOf("QUICK", "ADVANCED", "PLACE", "JOURNEY")).forEach { (mode, expected)
+            requests.zip(listOf("QUICK", "ADVANCED", "PLACE", "PLACE", "JOURNEY")).forEach { (mode, expected)
                 ->
                 server.enqueue(
                     response(
@@ -78,7 +79,13 @@ class RemotePlaylistGenerationTest {
                         assertEquals("[2]", body["moodIds"].toString())
                         assertEquals("true", body["onlyInApp"].toString())
                     }
-                    is GenerationRequest.Place -> assertEquals(a.toString(), body["placeId"]?.jsonPrimitive?.content)
+                    is GenerationRequest.Place -> if (mode.placeId != null) {
+                        assertEquals(a.toString(), body["placeId"]?.jsonPrimitive?.content)
+                        assertFalse("musicPinId" in body)
+                    } else {
+                        assertEquals(b.toString(), body["musicPinId"]?.jsonPrimitive?.content)
+                        assertFalse("placeId" in body)
+                    }
                     is GenerationRequest.Journey -> {
                         val stops = requireNotNull(body["stops"]).jsonArray.map { it.jsonObject }
                         assertEquals(listOf(b.toString(), a.toString()), stops.map { it["id"]?.jsonPrimitive?.content })
@@ -119,9 +126,11 @@ class RemotePlaylistGenerationTest {
                 Triple(401, "AUTH_REQUIRED", DomainError.Unauthenticated),
                 Triple(403, "DENIED", DomainError.Forbidden),
                 Triple(409, "VERSION_CONFLICT", DomainError.VersionConflict),
-                Triple(422, "NO_CANDIDATES", DomainError.Validation("tracks", "no_candidates")),
+                Triple(422, "NO_CANDIDATES", DomainError.NoCandidates),
                 Triple(429, "RATE_LIMIT", DomainError.RateLimited()),
                 Triple(502, "PROVIDER_ERROR", DomainError.Server),
+                Triple(502, "PROVIDER_UNAVAILABLE", DomainError.SourceUnavailable()),
+                Triple(409, "IDEMPOTENCY_KEY_REUSED", DomainError.IdempotencyConflict()),
             )
             val config = NetworkConfig("https://example.invalid/", "sb_publishable_test")
             val online = RemoteCall(config, ConnectivityChecker { false }, NetworkErrorMapper(json))

@@ -47,6 +47,11 @@ class PlayTrackUseCaseTest {
         assertEquals(2, resolver.calls)
         assertEquals(1, player.calls)
     }
+    @Test fun `expired in app source never reaches the player`() = runTest {
+        resolver.result = DomainResult.Success(internalSource.copy(expiresAt = java.time.Instant.EPOCH))
+        assertError(useCase(id), DomainError.PlaybackSourceExpired(id))
+        assertEquals(0, player.calls)
+    }
     @Test fun `resolver and player cancellation propagate`() = runTest {
         resolver.before = { cancel() }
         assertCancellation { useCase(id) }

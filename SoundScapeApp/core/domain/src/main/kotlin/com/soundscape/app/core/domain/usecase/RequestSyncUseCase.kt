@@ -1,13 +1,14 @@
 package com.soundscape.app.core.domain.usecase
 
-import com.soundscape.app.core.domain.model.*
-import com.soundscape.app.core.domain.repository.*
+import com.soundscape.app.core.domain.model.DomainResult
+import com.soundscape.app.core.domain.model.SyncRequestStatus
+import com.soundscape.app.core.domain.model.flatMap
+import com.soundscape.app.core.domain.repository.AuthRepository
+import com.soundscape.app.core.domain.repository.SyncRequester
 
+/** Requests synchronization for a signed-in user. */
 class RequestSyncUseCase(private val auth: AuthRepository, private val sync: SyncRequester) {
-    suspend operator fun invoke(): DomainResult<SyncRequestStatus> {
-        val user = auth.currentUser()
-        if (user is DomainResult.Failure) return user
-        if ((user as DomainResult.Success).value == null) return DomainResult.Failure(DomainError.Unauthenticated)
-        return sync.requestSync()
-    }
+    /** Checks the current session before submitting the request. */
+    suspend operator fun invoke(): DomainResult<SyncRequestStatus> =
+        auth.requireCurrentUser().flatMap { sync.requestSync() }
 }

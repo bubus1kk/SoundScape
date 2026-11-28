@@ -2,8 +2,11 @@ package com.soundscape.app.core.domain.model
 
 import java.util.UUID
 import kotlin.time.Duration
+
+/** A track occurrence in an ordered playlist. */
 data class PlaylistItem(val track: Track)
 
+/** User or editorial playlist with a stable identity and ordered track occurrences. */
 data class Playlist(
     val id: UUID,
     val ownerId: UUID,
@@ -18,31 +21,42 @@ data class Playlist(
     val placeId: UUID? = null,
     val isEditorial: Boolean = false,
 ) {
+    /** Validates a playlist with a non-empty track list. */
     fun validate(): DomainResult<Unit> = validate(minItems = 1)
 
+    /** Validates a read view, allowing the server to return an empty track list. */
     fun validateForRead(): DomainResult<Unit> = validate(minItems = 0)
 
-    private fun validate(minItems: Int): DomainResult<Unit> {
-        val titleResult = validateTitle(title)
-        if (titleResult is DomainResult.Failure) return titleResult
-        if (revision < 1) return invalid("revision", "positive")
-        if (description != null && description.length > 2000) return invalid("description", "max_2000")
-        if (items.size !in minItems..100) {
-            val reason = if (minItems == 0) "count_0_to_100" else "count_1_to_100"
-            return invalid("items", reason)
+    private fun validate(minItems: Int): DomainResult<Unit> = validateTitle(title).flatMap {
+        when {
+            revision < 1 -> invalid("revision", "positive")
+            description != null && description.length > MAX_PLAYLIST_DESCRIPTION -> invalid("description", "max_2000")
+            items.size !in minItems..MAX_CONTENT_TRACKS ->
+                invalid("items", if (minItems == 0) "count_0_to_100" else "count_1_to_100")
+            else -> validateFacets("genreIds", genreIds)
+                .flatMap { validateFacets("tagIds", tagIds) }
+                .flatMap { validateTracks() }
         }
-        for ((field, ids) in listOf("genreIds" to genreIds, "tagIds" to tagIds)) {
-            if (ids.size > 30) return invalid(field, "max_30")
-            if (ids.any { it <= 0 }) return invalid(field, "positive_ids")
-            if (ids.distinct().size != ids.size) return invalid(field, "duplicates")
-        }
+    }
+
+    private fun validateFacets(field: String, ids: List<Int>): DomainResult<Unit> = when {
+        ids.size > MAX_PLAYLIST_FACETS -> invalid(field, "max_30")
+        ids.any { it <= 0 } -> invalid(field, "positive_ids")
+        ids.distinct().size != ids.size -> invalid(field, "duplicates")
+        else -> DomainResult.Success(Unit)
+    }
+
+    private fun validateTracks(): DomainResult<Unit> {
         for (item in items) {
             val result = item.track.validate()
             if (result is DomainResult.Failure) return result
         }
         return DomainResult.Success(Unit)
     }
+
+    /** Sums the duration of all track occurrences. */
     fun totalDuration(): Duration = items.fold(Duration.ZERO) { sum, item -> sum + item.track.duration }
+    /** Sums the duration of track occurrences playable in SoundScape. */
     fun inAppDuration(): Duration {
         var total = Duration.ZERO
         for (item in items) {

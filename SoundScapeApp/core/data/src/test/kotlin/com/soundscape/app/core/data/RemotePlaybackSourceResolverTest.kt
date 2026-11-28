@@ -75,7 +75,7 @@ class RemotePlaybackSourceResolverTest {
                 Triple(429, edgeError("RATE_LIMITED"), DomainError.RateLimited()),
                 Triple(500, edgeError("INTERNAL_ERROR"), DomainError.Server),
                 Triple(502, edgeError("PROVIDER_ERROR"), DomainError.Server),
-                Triple(503, edgeError("PROVIDER_UNAVAILABLE"), DomainError.Server),
+                Triple(503, edgeError("PROVIDER_UNAVAILABLE"), DomainError.SourceUnavailable()),
             )
             for ((status, body, expected) in cases) {
                 server.enqueue(jsonResponse(body, status))

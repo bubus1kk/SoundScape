@@ -3,6 +3,7 @@
 package com.soundscape.app.core.data
 
 import com.soundscape.app.core.domain.model.DomainError
+import com.soundscape.app.core.domain.model.GenerationResultIssue
 import com.soundscape.app.core.domain.model.DomainResult
 import com.soundscape.app.core.domain.model.GeoPoint
 import com.soundscape.app.core.domain.model.GeoBounds
@@ -77,6 +78,8 @@ class NetworkErrorMapper @Inject constructor(private val json: Json) {
         val code = ((error?.get("code") ?: error?.get("error_code")) as? JsonPrimitive)?.contentOrNull
         val message = (error?.get("message") as? JsonPrimitive)?.contentOrNull
         return when {
+            code == "AI_INVALID_RESULT" -> DomainError.InvalidGeneration(GenerationResultIssue.SERVER_REJECTED)
+            code == "PROVIDER_UNAVAILABLE" -> DomainError.SourceUnavailable(retryAfter(retry))
             status >= 500 -> DomainError.Server
             status == 429 -> DomainError.RateLimited(retryAfter(retry))
             else -> clientError(status, code, message)
@@ -89,6 +92,7 @@ class NetworkErrorMapper @Inject constructor(private val json: Json) {
         409 -> when (message) {
             "OBJECT_ALREADY_EXISTS" -> DomainError.AlreadyExists
             "VERSION_CONFLICT" -> DomainError.VersionConflict
+            "IDEMPOTENCY_KEY_REUSED" -> DomainError.IdempotencyConflict()
             else -> if (code == "23505") DomainError.AlreadyExists else DomainError.Unexpected
         }
         400, 422 -> validationError(code, message)
@@ -99,7 +103,7 @@ class NetworkErrorMapper @Inject constructor(private val json: Json) {
             code == "PT401" && message == "AUTH_REQUIRED") DomainError.Unauthenticated
         else DomainError.Unexpected
     private fun validationError(code: String?, message: String?): DomainError =
-        if (code == "NO_CANDIDATES") DomainError.Validation("tracks", "no_candidates")
+        if (code == "NO_CANDIDATES") DomainError.NoCandidates
         else if (code == "invalid_credentials") DomainError.InvalidCredentials
         else if (code == "VALIDATION_ERROR" ||
             code == "PT422" && message in setOf("INVALID_BOUNDS", "INVALID_PAGINATION"))

@@ -117,10 +117,10 @@ class PlaylistWorkshopViewModelTest {
         assertTrue(opened)
         assertEquals(fixture.track.id, saved.draft?.tracks?.single()?.id)
         assertEquals(fixture.track.title, model.state.value.metadata[fixture.track.id]?.title)
-        fixture.generateError = DomainError.Validation("prompt", "no_candidates")
+        fixture.generateError = DomainError.NoCandidates
         model.generate { error("No candidates") }
         advanceUntilIdle()
-        assertEquals(DomainError.Validation("prompt", "no_candidates"), model.state.value.generationError)
+        assertEquals(DomainError.NoCandidates, model.state.value.generationError)
         assertEquals(fixture.track.id, saved.draft?.tracks?.single()?.id)
     }
 
@@ -373,7 +373,9 @@ class PlaylistWorkshopViewModelTest {
             requests += request
             generationGate?.await()
             return generateError?.let { DomainResult.Failure(it) } ?: DomainResult.Success(
-                GeneratedPlaylistDraft("Preview", "Description", listOf(GeneratedItem(track.id, "reason"))),
+                GeneratedPlaylistDraft(
+                    "Preview", "Description", listOf(GeneratedItem(track.id, "reason", TrackAvailability.IN_APP)),
+                ),
             )
         }
 

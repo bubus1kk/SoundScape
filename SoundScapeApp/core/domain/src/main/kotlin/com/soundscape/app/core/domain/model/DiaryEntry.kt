@@ -2,6 +2,8 @@ package com.soundscape.app.core.domain.model
 
 import java.time.LocalDate
 import java.util.UUID
+
+/** A dated musical memory with independent visibility and optional map coordinates. */
 data class DiaryEntry(
     val id: UUID,
     val ownerId: UUID,
@@ -16,14 +18,14 @@ data class DiaryEntry(
     val musicPinId: UUID? = null,
     val body: String? = null,
 ) {
-    fun validate(): DomainResult<Unit> {
-        val titleResult = validateTitle(title)
-        if (titleResult is DomainResult.Failure) return titleResult
-        if (revision < 1) return invalid("revision", "positive")
-        if (locationName != null && locationName.isBlank()) return invalid("locationName", "blank")
-        if (locationName.isNullOrBlank() && coordinates == null && musicPinId == null) {
-            return invalid("location", "required")
+    /** Checks the stored entry, including its location and attachments. */
+    fun validate(): DomainResult<Unit> = validateTitle(title).flatMap {
+        when {
+            revision < 1 -> invalid("revision", "positive")
+            locationName != null && locationName.isBlank() -> invalid("locationName", "blank")
+            locationName.isNullOrBlank() && coordinates == null && musicPinId == null ->
+                invalid("location", "required")
+            else -> validateAttachments(trackIds, photos, MAX_DIARY_PHOTOS)
         }
-        return validateAttachments(trackIds, photos, 10)
     }
 }

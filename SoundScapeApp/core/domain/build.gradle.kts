@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kover)
+    alias(libs.plugins.detekt)
 }
 
 dependencies {
@@ -10,6 +11,12 @@ dependencies {
 }
 
 kotlin { jvmToolchain(25) }
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+    source.setFrom(files("src/main/kotlin"))
+}
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11
