@@ -1,6 +1,7 @@
 import { HttpError } from './core.ts';
 import type { RequestContext } from './observability.ts';
 import type { NetworkCategory } from './provider_errors.ts';
+import type { IntentValidationFailure } from './music_intent.ts';
 
 type Stage = 'intent' | 'selection';
 type ParserFailure = 'invalid_envelope' | 'missing_choices' | 'invalid_content_type' | 'empty_content' |
@@ -63,7 +64,7 @@ export function decodeCompletion(raw:unknown) {
 export function logGigaCompletion(ctx:RequestContext|undefined, fields:{
   stage:Stage;requestedModel:string;startedAt:number; status:number|null; candidateCount:number|null;
   decoded?:ReturnType<typeof decodeCompletion>;
-  validationFailure?:SelectionFailure|'no_eligible_genres'|'unverified_audio_characteristics';
+  validationFailure?:SelectionFailure|IntentValidationFailure|'no_eligible_genres'|'unverified_audio_characteristics';
   transportFailure?:NetworkCategory|'http_error';
 }) {
   if(!ctx)return;

@@ -49,6 +49,24 @@ Deno.test('invalid intent structure fails closed',()=>{
   }
 });
 
+Deno.test('hosted intent keeps its strict shape and classifies shape failures without model content',()=>{
+  const request={mode:'QUICK' as const,contextCount:0,prompt:'Подборка без рока',genre:''};
+  const intent={kind:'MIXED',target:'',genres:['Jazz','Rock'],moods:[],excludedGenres:[],requiredGenres:[]};
+  assert.deepEqual(parseMusicIntent(intent,vocabulary,request).genres,['Jazz']);
+  for(const [value,reason] of [
+    [JSON.stringify(intent),'intent_object'],
+    [{...intent,extra:true},'intent_fields'],
+    [{...intent,kind:'UNKNOWN'},'intent_kind'],
+    [{...intent,target:'x'.repeat(151)},'intent_target'],
+    [{...intent,genres:Array(9).fill('Jazz')},'intent_genres'],
+    [{...intent,moods:[' ']},'intent_moods'],
+    [{...intent,excludedGenres:null},'intent_excludedGenres'],
+    [{...intent,requiredGenres:['x'.repeat(81)]},'intent_requiredGenres'],
+  ] as const){
+    assert.throws(()=>parseMusicIntent(value,vocabulary,request),{status:502,code:'AI_INVALID_RESULT',reason});
+  }
+});
+
 Deno.test('Audius confirmation expires at exactly one hour',()=>{
   const now=Date.parse('2026-11-24T15:00:00Z');
   const source={provider:'AUDIUS',can_stream:true,verified_at:'2026-11-24T14:00:00Z'};

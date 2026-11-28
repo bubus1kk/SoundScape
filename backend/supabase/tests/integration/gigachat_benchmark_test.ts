@@ -96,3 +96,66 @@ Deno.test('controlled Lite and Pro benchmark sends identical prompts, schema and
     });
   }
 });
+
+Deno.test('GigaChat Pro intent and selection preserve the four supported modes', async () => {
+  const originalFetch=globalThis.fetch;
+  const keys=['GIGACHAT_AUTH_KEY','GIGACHAT_MODEL','GIGACHAT_SCOPE'];
+  const originalEnv=keys.map(key=>Deno.env.get(key));
+  const modes:GenerationMode[]=['QUICK','ADVANCED','PLACE','JOURNEY'];
+  const read:Parameters<typeof analyzeIntent>[4]=async table=>table==='genres'
+    ? [{id:1,name:'Jazz'},{id:2,name:'Rock'}] : [{id:1,name:'Peaceful'}];
+  try {
+    Deno.env.set('GIGACHAT_AUTH_KEY','pro-mode-fixture');
+    Deno.env.set('GIGACHAT_SCOPE','GIGACHAT_API_PERS');
+    Deno.env.set('GIGACHAT_MODEL','GigaChat-2-Pro');
+    for(const mode of modes) {
+      const context=mode==='PLACE'?[{title:'Париж'}]:mode==='JOURNEY'?[{title:'Париж'},{title:'Берлин'}]:[];
+      const prompt='Спокойная прогулка, только джаз, без рока';
+      const input={...request,prompt,context};
+      const calls:string[]=[];
+      globalThis.fetch=(url,init)=>{
+        const host=new URL(String(url)).hostname;
+        if(host==='ngw.devices.sberbank.ru') {
+          calls.push('oauth');
+          return Promise.resolve(Response.json({access_token:'pro-mode-fixture'}));
+        }
+        assert.equal(host,'api.giga.chat');
+        const payload=JSON.parse(String(init?.body));
+        assert.equal(payload.model,'GigaChat-2-Pro');
+        assert.equal(payload.response_format.strict,true);
+        const body=JSON.parse(payload.messages[1].content);
+        assert.equal(body.mode,mode);
+        assert.deepEqual(body.context.map((stop:{title:string})=>stop.title),context.map(stop=>stop.title));
+        const stage=body.vocabulary?'intent':'selection';
+        calls.push(stage);
+        if(stage==='intent') {
+          assert.deepEqual(payload.response_format.schema.required,
+            ['kind','genres','moods','excludedGenres','requiredGenres','target']);
+          assert.match(payload.response_format.schema.properties.genres.description,/8/);
+          assert.match(payload.response_format.schema.properties.target.description,/150/);
+        } else {
+          assert.deepEqual(body.candidates.map((candidate:Track)=>candidate.title),[tracks[0].title]);
+        }
+        const result=stage==='intent'
+          ? {...emptyIntent,kind:context.length?mode:'MOOD',genres:['Jazz'],moods:['Peaceful']}
+          : {title:'Подборка',description:'Джаз для прогулки',items:[1]};
+        return Promise.resolve(Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(result)}}]}));
+      };
+      const session={deadline:AbortSignal.timeout(3000)};
+      const analyzed=await analyzeIntent(mode,input,session,undefined,read);
+      assert.deepEqual(analyzed.intent.requiredGenres,['Jazz']);
+      assert.deepEqual(analyzed.intent.excludedGenres,['Rock']);
+      const preview=await generatePreview(mode,{...input,...analyzed},1,undefined,async()=>tracks,
+        (payload,candidates,count)=>giga(payload,candidates,count,undefined,session));
+      assert.equal(preview.items[0].trackId,tracks[0].id);
+      assert.deepEqual(calls,['oauth','intent','selection']);
+    }
+  } finally {
+    globalThis.fetch=originalFetch;
+    for(const [index,key] of keys.entries()) {
+      const value=originalEnv[index];
+      if(value===undefined)Deno.env.delete(key);
+      else Deno.env.set(key,value);
+    }
+  }
+});

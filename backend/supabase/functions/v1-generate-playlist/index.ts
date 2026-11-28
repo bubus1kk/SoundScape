@@ -5,7 +5,7 @@ import type {MusicContext} from '../_shared/ai_query.ts';
 import { networkCategory, networkFailure, providerHttpFailure, invalidProviderResponse } from '../_shared/provider_errors.ts';
 import type { RequestContext } from '../_shared/observability.ts';
 import { intentInstructions, intentSchema, intentRelevance, genreKey, parseMusicIntent, MusicIntentConstraintError,
- type GenerationMode as Mode, type MusicIntent } from '../_shared/music_intent.ts';
+ MusicIntentValidationError, type GenerationMode as Mode, type MusicIntent } from '../_shared/music_intent.ts';
 import { decodeCompletion, logGigaCompletion, logGenerationEligibility, SelectionValidationError } from '../_shared/gigachat_response.ts';
 import { gigaCompletionResponse, gigaOAuth, openGigaClient } from '../_shared/gigachat_client.ts';
 
@@ -97,7 +97,8 @@ async function gigaJson<T>(stage:'intent'|'selection',schema:Record<string,unkno
   logGigaCompletion(ctx,observation);
   return result;
  }catch(error){
-  const validationFailure=error instanceof SelectionValidationError||error instanceof MusicIntentConstraintError
+  const validationFailure=error instanceof SelectionValidationError||error instanceof MusicIntentConstraintError||
+    error instanceof MusicIntentValidationError
     ?error.reason:'invalid_structure';
   logGigaCompletion(ctx,{...observation,validationFailure});
   throw error;
