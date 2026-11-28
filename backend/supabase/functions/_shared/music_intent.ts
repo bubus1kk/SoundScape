@@ -2,6 +2,14 @@ import { HttpError } from './core.ts';
 
 const kinds = ['ATMOSPHERE', 'MOOD', 'SITUATION', 'ACTIVITY', 'GENRE', 'ARTIST', 'TRACK', 'PLACE', 'JOURNEY', 'MIXED'] as const;
 export type GenerationMode = 'QUICK' | 'ADVANCED' | 'PLACE' | 'JOURNEY';
+type IntentLabelField = 'genres' | 'moods' | 'excludedGenres' | 'requiredGenres';
+export type IntentValidationFailure = 'intent_object' | 'intent_fields' | 'intent_kind' | 'intent_target' |
+  `intent_${IntentLabelField}`;
+export class MusicIntentValidationError extends HttpError {
+  constructor(readonly reason:IntentValidationFailure) {
+    super(502,'AI_INVALID_RESULT','AI returned invalid musical intent');
+  }
+}
 export class MusicIntentConstraintError extends HttpError {
   constructor(readonly reason:'no_eligible_genres'|'unverified_audio_characteristics', message:string) {
     super(422,'NO_CANDIDATES',message);
@@ -16,10 +24,14 @@ export type MusicIntent = {
   target: string;
 };
 
-const stringList = {type:'array',items:{type:'string'}};
+const maxLabels=8, maxLabelLength=80, maxTargetLength=150;
+const stringList = {type:'array',items:{type:'string',
+  description:`Непустое название длиной до ${maxLabelLength} символов`},
+  description:`Не более ${maxLabels} названий. Если подходящих нет, используй []`};
 const intentProperties = {
   kind:{type:'string',enum:kinds}, genres:stringList, moods:stringList,
-  excludedGenres:stringList, requiredGenres:stringList, target:{type:'string'},
+  excludedGenres:stringList, requiredGenres:stringList, target:{type:'string',
+    description:`Имя для ARTIST или название для TRACK до ${maxTargetLength} символов. В остальных случаях пустая строка`},
 };
 export const intentSchema = {
   type:'object',properties:intentProperties,required:Object.keys(intentProperties),additionalProperties:false,
@@ -32,7 +44,9 @@ export const intentInstructions =
   'Учитывай отрицания («без», «только не», «не добавляй»), а явное «только» для жанра считай строгим ограничением. ' +
   'Не подменяй требования к вокалу, инструментам или BPM жанровыми фильтрами. ' +
   'Верни только JSON с kind (' + kinds.join(', ') + '), genres, moods, excludedGenres, requiredGenres (массивы названий из справочника), ' +
-  'target (имя только для ARTIST или название только для TRACK). Явные фильтры обязательны. ' +
+  'target (имя только для ARTIST или название только для TRACK). Верни все шесть полей без дополнительных свойств. ' +
+  `Каждый массив содержит не более ${maxLabels} непустых названий до ${maxLabelLength} символов, при отсутствии значений верни []. ` +
+  `target — строка до ${maxTargetLength} символов, для остальных kind используй "". Явные фильтры обязательны. ` +
   'Сохраняй оригинальное написание имени или названия. Не придумывай композиции, исполнителей, BPM, инструментальность или ссылки. Не используй идентификаторы.';
 
 const genreAliases = [
@@ -95,20 +109,22 @@ export function explicitGenreLimits(text: string, vocabulary: string[]) {
 
 export function parseMusicIntent(value: unknown, vocabulary: {genres: string[]; moods: string[]},
   request?: {mode:GenerationMode; contextCount:number; prompt:string; genre:string}): MusicIntent {
-  const invalid = () => new HttpError(502, 'AI_INVALID_RESULT', 'AI returned invalid musical intent');
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new MusicIntentValidationError('intent_object');
   const input = value as Record<string, unknown>;
   if(request&&(Object.keys(input).length!==intentSchema.required.length||
-    intentSchema.required.some(key=>!(key in input))||typeof input.target!=='string'||input.target.length>150))
-    throw invalid();
+    intentSchema.required.some(key=>!(key in input)))) throw new MusicIntentValidationError('intent_fields');
+  if(request&&(typeof input.target!=='string'||input.target.length>maxTargetLength))
+    throw new MusicIntentValidationError('intent_target');
   let kind = kinds.find(option => option === input.kind);
-  if (!kind) throw invalid();
+  if (!kind) throw new MusicIntentValidationError('intent_kind');
   if(request && (kind==='PLACE'||kind==='JOURNEY') &&
     (kind!==request.mode || request.contextCount<(kind==='PLACE'?1:2))) kind='ATMOSPHERE';
-  function labels(raw: unknown, allowed: string[], aliases: string[][], preserveUnknown=false) {
+  function labels(field: IntentLabelField, allowed: string[], aliases: string[][], preserveUnknown=false) {
+    const raw=input[field];
     if (raw === undefined&&!request) return [];
-    if (!Array.isArray(raw) || raw.length > 8 ||
-        raw.some(label => typeof label !== 'string' || !label.trim() || label.length > 80)) throw invalid();
+    if (!Array.isArray(raw) || raw.length > maxLabels ||
+        raw.some(label => typeof label !== 'string' || !label.trim() || label.length > maxLabelLength))
+      throw new MusicIntentValidationError(`intent_${field}`);
     return [...new Set(raw.flatMap(label => {
       const key=labelKey(label);
       const equivalents=aliases.find(group=>group.includes(key))??[key];
@@ -118,27 +134,28 @@ export function parseMusicIntent(value: unknown, vocabulary: {genres: string[]; 
   }
   let target = '';
   if (kind === 'ARTIST' || kind === 'TRACK') {
-    if (typeof input.target !== 'string' || !input.target.trim() || input.target.length > 150) throw invalid();
+    if (typeof input.target !== 'string' || !input.target.trim() || input.target.length > maxTargetLength)
+      throw new MusicIntentValidationError('intent_target');
     target = input.target.trim();
   }
   const text=request?request.prompt+'. '+request.genre:'';
   if(requiresUnverifiedAudioMetadata(text))
     throw new MusicIntentConstraintError('unverified_audio_characteristics','Catalog cannot confirm the requested audio characteristics');
   const explicit=request?explicitGenreLimits(text,vocabulary.genres):undefined;
-  const modelExcluded=labels(input.excludedGenres,vocabulary.genres,genreAliases,true);
+  const modelExcluded=labels('excludedGenres',vocabulary.genres,genreAliases,true);
   const genreLabels=(keys:Set<string>)=>[...keys].flatMap(key=>{
     const matching=vocabulary.genres.filter(name=>genreKey(name)===key);
     return matching.length?matching:[key];
   });
   const excludedGenres=[...new Set([...modelExcluded,...genreLabels(explicit?.excluded??new Set())])];
-  const modelRequired=labels(input.requiredGenres,vocabulary.genres,genreAliases,true);
+  const modelRequired=labels('requiredGenres',vocabulary.genres,genreAliases,true);
   const requiredKeys=explicit?.required.size?explicit.required:new Set(modelRequired.map(genreKey));
   const requiredGenres=vocabulary.genres.filter(name=>requiredKeys.has(genreKey(name)));
   const missingRequired=[...requiredKeys].some(key=>!requiredGenres.some(name=>genreKey(name)===key));
   if(missingRequired || requiredGenres.some(name=>excludedGenres.some(excluded=>genreKey(excluded)===genreKey(name))))
     throw new MusicIntentConstraintError('no_eligible_genres','Requested genre is unavailable');
-  return {kind, target, excludedGenres, moods:labels(input.moods,vocabulary.moods,moodAliases),
-    genres:labels(input.genres,vocabulary.genres,genreAliases)
+  return {kind, target, excludedGenres, moods:labels('moods',vocabulary.moods,moodAliases),
+    genres:labels('genres',vocabulary.genres,genreAliases)
       .filter(genre=>!excludedGenres.some(excluded=>genreKey(excluded)===genreKey(genre))),
     ...(requiredGenres.length?{requiredGenres}:{})};
 }

@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict';
+import media from '../../functions/v1-media/index.ts';
+
 function localEnv(variable: string) {
   return Deno.permissions.querySync({ name: 'env', variable }).state === 'granted'
     ? Deno.env.get(variable) : undefined;
@@ -317,3 +320,59 @@ Deno.test({ name: 'BE-02 local email confirmation, recovery, refresh and logout'
       await request('/auth/v1/admin/users/' + id, 200, { method: 'DELETE', admin: true });
     }
   }});
+
+const fixtureOwner = 'a74b6f47-07d1-4379-9417-d29b4ecc9c8f';
+Deno.test('Scheduled media cleanup requires a service key and retries without premature completion', async () => {
+  const env = {
+    SUPABASE_URL: 'https://fixture.invalid',
+    SUPABASE_SECRET_KEYS: '{"default":"sb_secret_fixture"}',
+    SUPABASE_SERVICE_ROLE_KEY: 'legacy.service.fixture',
+  };
+  const saved = Object.keys(env).map(name => [name, Deno.env.get(name)] as const);
+  const originalFetch = globalThis.fetch;
+  const path = `users/${fixtureOwner}/detached.png`;
+  const calls: string[] = [];
+  let storageAvailable = false;
+  let pending = true;
+  const invoke = (key: string) => media.fetch(new Request('https://fixture.invalid/v1-media', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', apikey: key, authorization: 'Bearer forwarded' },
+    body: JSON.stringify({ action: 'PROCESS_PENDING' }),
+  }));
+
+  try {
+    for (const [name, value] of Object.entries(env)) Deno.env.set(name, value);
+    globalThis.fetch = (input, init) => {
+      const route = new URL(String(input)).pathname.split('/').at(-1)!;
+      calls.push(route);
+      if (route === 'edge_claim_pending_media_cleanup') {
+        return Promise.resolve(Response.json(pending ? { userId: fixtureOwner, paths: [path] } : null));
+      }
+      if (route === 'soundscape-media') {
+        assert.equal(init?.method, 'DELETE');
+        assert.deepEqual(JSON.parse(String(init?.body)), { prefixes: [path] });
+        return Promise.resolve(new Response(null, { status: storageAvailable ? 204 : 503 }));
+      }
+      assert.equal(route, 'edge_complete_media_cleanup');
+      assert.deepEqual(JSON.parse(String(init?.body)), { p_user: fixtureOwner, p_paths: [path] });
+      pending = false;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+
+    assert.equal((await invoke('sb_publishable_fixture')).status, 401);
+    assert.deepEqual(calls, []);
+    assert.equal((await invoke('sb_secret_fixture')).status, 503);
+    assert.deepEqual(calls.splice(0), ['edge_claim_pending_media_cleanup', 'soundscape-media']);
+    storageAvailable = true;
+    assert.deepEqual(await (await invoke('legacy.service.fixture')).json(), { status: 'PROCESSED', processed: 1 });
+    assert.deepEqual(calls.splice(0), ['edge_claim_pending_media_cleanup', 'soundscape-media', 'edge_complete_media_cleanup']);
+    assert.deepEqual(await (await invoke('sb_secret_fixture')).json(), { status: 'IDLE' });
+    assert.deepEqual(calls, ['edge_claim_pending_media_cleanup']);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of saved) {
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    }
+  }
+});

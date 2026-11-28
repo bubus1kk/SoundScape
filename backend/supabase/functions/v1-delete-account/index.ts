@@ -1,21 +1,10 @@
 import {
-  authenticate, body, HttpError, privilegedHeaders, response, rpc, run, secretKey, supabaseUrl, uuid,
+  authenticate, body, HttpError, privilegedHeaders, response, rpc, run, supabaseUrl, uuid,
 } from '../_shared/core.ts';
 import type { RequestContext } from '../_shared/core.ts';
 import { ownedPaths, removeMedia } from '../_shared/media_cleanup.ts';
 
-async function maintenanceAuthorized(req: Request): Promise<boolean> {
-  const key = req.headers.get('apikey');
-  if (!key) return false;
-  const encoder = new TextEncoder();
-  const verifier = await crypto.subtle.importKey(
-    'raw', encoder.encode(secretKey()), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'],
-  );
-  const expected = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const proof = await crypto.subtle.sign('HMAC', verifier, encoder.encode(key));
-  return await crypto.subtle.verify('HMAC', verifier, proof, encoder.encode(secretKey())) ||
-    (!!expected && await crypto.subtle.verify('HMAC', verifier, proof, encoder.encode(expected)));
-}
+import { maintenanceAuthorized } from '../_shared/maintenance_auth.ts';
 
 async function processDeletion(userId: string, ctx: RequestContext) {
   const batch = await rpc('edge_begin_account_deletion', { p_user: userId }, ctx);

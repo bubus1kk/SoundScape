@@ -4,7 +4,12 @@ name: SoundScape / Server tests
 on:
   workflow_dispatch:
   push:
-    branches: [feat/backend, feature/ui-realisation, develop, main]
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'fix/**'
+      - 'feat/**'
     paths:
       - '.github/workflows/soundscape-server-tests.yml'
       - 'backend/supabase/**'
